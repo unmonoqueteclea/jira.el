@@ -221,11 +221,13 @@
                                         id)))
                         (magit-insert-section (jira-attachment-section val nil)
                           (magit-insert-section-body
-                            (insert (format "%-40s %s, %sB\n"
+                            (insert (format "%-30s %10s %5sB %s\n"
                                             (alist-get 'filename attachment)
                                             (alist-get 'mimeType attachment)
                                             (file-size-human-readable
-                                             (alist-get 'size attachment))))))))
+                                             (alist-get 'size attachment))
+                                            (jira-fmt-datetime
+                                             (alist-get 'created attachment))))))))
                       attachments)))
           (insert "\n")))))
 
