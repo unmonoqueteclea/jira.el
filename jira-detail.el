@@ -185,6 +185,28 @@
    (lambda (data _response)
      (jira-detail--comments key (alist-get 'comments data)))))
 
+(defun jira-detail--show-attachments (key issue)
+  "Display attachments for issue KEY."
+  (let* ((fields (alist-get 'fields issue))
+         (attachments (alist-get 'attachment fields)))
+    (with-current-buffer (get-buffer-create (concat "*Jira Issue Detail: [" key "]*"))
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (magit-insert-section (jira-issue-attachments nil nil)
+          (magit-insert-heading "Attachments")
+          (magit-insert-section-body
+            (mapcar (lambda (attachment)
+                      (magit-insert-section (attachment nil nil)
+                        (magit-insert-section-body
+                          (insert (format "%-40s %s, %sB\n"
+                                          (alist-get 'filename attachment)
+                                          (alist-get 'mimeType attachment)
+                                          (file-size-human-readable
+                                           (alist-get 'size attachment)))))))
+                    attachments)))
+        (insert "\n")))))
+
+
 (defun jira-detail-show-issue (key)
   "Retrieve and show the detail information of the issue with KEY."
   (jira-api-call
@@ -193,6 +215,7 @@
    (lambda (data _response)
      (let* ((issue (json-read-from-string (json-encode data))))
        (jira-detail--issue key issue)
+       (jira-detail--show-attachments key issue)
        (jira-detail--show-comments key)))))
 
 
