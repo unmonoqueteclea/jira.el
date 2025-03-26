@@ -185,6 +185,13 @@
    (lambda (data _response)
      (jira-detail--comments key (alist-get 'comments data)))))
 
+(defvar-keymap jira-attachment-section-map
+  :doc "Keymap for Jira attachment sections."
+  "<RET>" #'jira-detail--get-attachment)
+
+(defclass jira-attachment-section (magit-section)
+  ((keymap :initform 'jira-attachment-section-map)))
+
 (defun jira-detail--show-attachments (key issue)
   "Display attachments for issue KEY."
   (let* ((fields (alist-get 'fields issue))
@@ -196,16 +203,45 @@
           (magit-insert-heading "Attachments")
           (magit-insert-section-body
             (mapcar (lambda (attachment)
-                      (magit-insert-section (attachment nil nil)
-                        (magit-insert-section-body
-                          (insert (format "%-40s %s, %sB\n"
-                                          (alist-get 'filename attachment)
-                                          (alist-get 'mimeType attachment)
-                                          (file-size-human-readable
-                                           (alist-get 'size attachment)))))))
-                    attachments)))
-        (insert "\n")))))
+                      (let* ((url (url-generic-parse-url (alist-get 'content attachment)))
+                             ;; FIXME: verify that filename matches
+                             ;; "attachment/content/[0-9]+"
+                             (id (file-name-nondirectory
+                                  (url-filename url)))
+                             (val (list (alist-get 'filename attachment)
+                                        id)))
+                        (magit-insert-section (jira-attachment-section val nil)
+                          (magit-insert-section-body
+                            (insert (format "%-40s %s, %sB\n"
+                                            (alist-get 'filename attachment)
+                                            (alist-get 'mimeType attachment)
+                                            (file-size-human-readable
+                                             (alist-get 'size attachment)))))))
+                      attachments)))
+          (insert "\n"))))))
 
+(defun jira-detail--get-attachment ()
+  "Get the attachment in the current section and visit it in a new buffer."
+  (interactive)
+  (pcase (magit-section-value-if [jira-attachment-section])
+    (`(,name ,id)
+     (jira-api-call
+      "GET" (format "attachment/content/%s" id)
+      ;; don't want the default parser `json-read' here: the
+      ;; attachment content is not wrapped in JSON.
+      :parser #'buffer-string
+      :callback
+      (lambda (data _response)
+        (jira-detail--show-attachment name data))))
+    (_ (error "Not a Jira attachment"))))
+
+(defun jira-detail--show-attachment (name data)
+  (let ((x (generate-new-buffer-name name)))
+    (pop-to-buffer x)
+    (insert data)
+    (goto-char (point-min))
+    (normal-mode)
+    (set-buffer-modified-p nil)))
 
 (defun jira-detail-show-issue (key)
   "Retrieve and show the detail information of the issue with KEY."

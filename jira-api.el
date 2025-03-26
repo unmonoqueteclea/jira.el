@@ -131,11 +131,12 @@
     (message "[Jira API Response Body]: %s" (or response-data "No response body"))))
 
 
-(cl-defun jira-api-call (verb endpoint &key params data callback)
+(cl-defun jira-api-call (verb endpoint &key params data callback parser)
   "Perform a VERB request to the Jira API ENDPOINT.
 
 PARAMS is a list of cons cells, DATA is the request body, and CALLBACK
-is the function to call if successful."
+is the function to call if successful. PARSER is a function to call
+in a buffer with the result data, defaulting to `json-read'."
   (message "[Jira API Call]: %s %s" verb endpoint)
   (when (and jira-debug data)
     (message "[Jira API Call Data]: %s" (json-encode data)))
@@ -149,7 +150,7 @@ is the function to call if successful."
                  ("Content-Type" . "application/json"))
       :params (or params '())
       :data (if data (json-encode data) nil)
-      :parser 'json-read
+      :parser (or parser 'json-read)
       :success (cl-function
                 (lambda (&key data response &allow-other-keys)
 		  (when jira-debug
