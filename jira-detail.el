@@ -236,6 +236,7 @@
   (interactive)
   (pcase (magit-section-value-if [jira-attachment-section])
     (`(,name ,id)
+     (message "Fetching %s..." name)
      (jira-api-call
       "GET" (format "attachment/content/%s" id)
       ;; don't want the default parser `json-read' here: the
