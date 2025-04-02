@@ -37,6 +37,14 @@
 (require 'jira-table)
 (require 'jira-utils)
 
+
+(defcustom jira-comments-display-recent-first
+  t
+  "The order to display Jira comments."
+  :type '(choice (const :tag "Newest first" t)
+                 (const :tag "Oldest first" nil))
+  :group 'jira)
+
 ;; they override the default formatters specified
 ;; in jira-issues-fields
 (defvar jira-detail-formatters
@@ -189,7 +197,11 @@
 (defun jira-detail--show-comments (key)
   "Retrieve and display comments for issue KEY."
   (jira-api-call
-   "GET" (format "issue/%s/comment?orderBy=-created" key)
+   "GET" (format "issue/%s/comment?orderBy=%screated"
+                 key
+                 (if jira-comments-display-recent-first
+                     "-"
+                   ""))
    :callback
    (lambda (data _response)
      (jira-detail--comments key (alist-get 'comments data)))))
