@@ -56,6 +56,12 @@
   (let ((marks (alist-get 'marks block)))
     (cl-find-if (lambda (m) (equal m '((type . "strong")))) marks)))
 
+(defun jira-doc--format-mention (block)
+  (let* ((attrs (alist-get 'attrs block))
+         (text (alist-get 'text attrs)))
+    ;; Instead of using text, we could look up the user's info based
+    ;; on the 'id attr.
+    (jira-fmt-mention text)))
 
 (defun jira-doc--format-inline-block(block)
   "Format inline BLOCK to a string."
@@ -65,6 +71,8 @@
           ((string= type "inlineCard")
            (let* ((url (alist-get 'url (alist-get 'attrs block))))
              (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
+          ((string= type "mention")
+           (jira-doc--format-mention block))
           (text (let ((text-str (format "%s " text)))
 		  (if (jira-doc--is-bold block)
 		      (jira-fmt-bold text-str)

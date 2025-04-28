@@ -42,6 +42,9 @@
 (defface jira-face-time
   '((t :inherit match)) "Face used to show times." :group 'jira)
 
+(defface jira-face-mention
+  '((t :inherit link)) "Face used to show mentions." :group 'jira)
+
 (defface jira-face-success
   '((t (:foreground "#fff" :background "#77AA77")))
   "Face used to show success status." :group 'jira)
@@ -199,6 +202,10 @@ COLOR-TODAY is a boolean to color the date if it is today."
 (defun jira-fmt-code (text)
   "Format TEXT as code, with a monospaced font and a light background."
   (propertize text 'face '(:family "Monospace" :background "#f0f0f0")))
+
+(defun jira-fmt-mention (text)
+  "Format TEXT as a mention."
+  (propertize text 'face 'jira-face-mention))
 
 (provide 'jira-fmt)
 
