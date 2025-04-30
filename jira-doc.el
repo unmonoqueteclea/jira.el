@@ -95,11 +95,23 @@
                       (marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text-str marks))))))
 
+(defvar jira-doc--indent
+  0
+  "Curent indentation level for list item nodes.")
+(defvar jira-doc--list-prefix
+  nil
+  "A thunk returning a prefix for list item nodes.")
+
 (defun jira-doc--format-content-block(block)
   "Format content BLOCK to a string."
   (let* ((type (alist-get 'type block))
          (sep (if (string= type "paragraph") "" "\n"))
-         (prefix (cond ((string= type "listItem") " - ") (t "")))
+         (prefix (if (string= type "listItem")
+                     (concat (make-string jira-doc--indent ?\ )
+                             (jira-fmt-bold
+                              (funcall jira-doc--list-prefix))
+                             " ")
+                   ""))
 	 (content
 	  (concat prefix
 		  (jira-doc--list-to-str
@@ -113,13 +125,36 @@
       (concat "\n" (jira-fmt-code content) "\n"))
      (t content))))
 
+(defun jira-doc--format-list-block (block)
+  "Format BLOCK, an orderedList or bulletList, to a string."
+  (let* ((type (alist-get 'type block))
+         (jira-doc--list-prefix
+          (cond
+           ((string= type "orderedList")
+            (let ((start (alist-get 'order
+                                    (alist-get 'attrs block)
+                                    1)))
+              (lambda ()
+                (prog1 (format "%s." start)
+                  (cl-incf start)))))
+           ((string= type "bulletList")
+            (lambda () "-"))
+           (t
+            jira-doc--list-prefix)))
+         (jira-doc--indent (+ 4 jira-doc--indent)))
+    (jira-doc--format-content-block block)))
+
 (defun jira-doc--format-block(block)
   "Format BLOCK to a string."
   (let ((type (alist-get 'type block)))
-    (if (or (member type jira-doc--top-level-blocks)
-            (member type jira-doc--child-blocks))
-        (jira-doc--format-content-block block)
-      (jira-doc--format-inline-block block))))
+    (cond ((or (string= type "orderedList")
+               (string= type "bulletList"))
+           (jira-doc--format-list-block block))
+          ((or (member type jira-doc--top-level-blocks)
+               (member type jira-doc--child-blocks))
+           (jira-doc--format-content-block block))
+          (t
+           (jira-doc--format-inline-block block)))))
 
 (defun jira-doc-format (doc)
   "Format DOC in Jira Document Format to a string."
