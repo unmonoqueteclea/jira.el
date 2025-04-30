@@ -211,6 +211,41 @@ COLOR-TODAY is a boolean to color the date if it is today."
   "Format TEXT as a mention."
   (propertize text 'face 'jira-face-mention))
 
+(defun jira-fmt-with-marks (text marks)
+  "Format TEXT using MARKS.
+
+See `jira-doc--marks' for the expected format of MARKS."
+  (if-let* ((url (alist-get 'link marks)))
+      (buttonize text
+                 #'(lambda (_button)
+                     (browse-url url))
+                 nil
+                 url)
+    (if (memq 'code marks)
+        (jira-fmt-code text)
+      (let* ((face-attrs (mapcan #'(lambda (x)
+                                     (pcase x
+                                       (`(color . ,c) `(:foreground ,c))
+                                       ('strong       '(:weight bold))
+                                       ('em           '(:slant italic))
+                                       ('underline    '(:underline t))
+                                       ('strike       '(:strike-through t))))
+                                 marks))
+             (baseline-offset 0)
+             (display-specs
+              (progn
+                (when (memq 'sub marks)
+                  (cl-decf baseline-offset))
+                (when (memq 'sup marks)
+                  (cl-incf baseline-offset))
+                (and (/= 0 baseline-offset)
+                     `(raise ,baseline-offset)))))
+        (when face-attrs
+          (setq text (propertize text 'face face-attrs)))
+        (when display-specs
+          (setq text (propertize text 'display `(,display-specs))))
+        text))))
+
 (provide 'jira-fmt)
 
 ;;; jira-fmt.el ends here
