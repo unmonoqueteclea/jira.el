@@ -91,9 +91,8 @@
              (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
           ((string= type "mention")
            (jira-doc--format-mention block))
-          (text (let ((text-str (format "%s " text))
-                      (marks (jira-doc--marks block)))
-                  (jira-fmt-with-marks text-str marks))))))
+          (text (let ((marks (jira-doc--marks block)))
+                  (jira-fmt-with-marks text marks))))))
 
 (defvar jira-doc--indent
   0
