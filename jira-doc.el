@@ -91,6 +91,9 @@
              (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
           ((string= type "mention")
            (jira-doc--format-mention block))
+          ((string= type "emoji")
+           (let ((text (alist-get 'text (alist-get 'attrs block))))
+             (jira-fmt-emoji text)))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text marks))))))
 

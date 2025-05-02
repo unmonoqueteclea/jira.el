@@ -45,6 +45,11 @@
 (defface jira-face-mention
   '((t :inherit link)) "Face used to show mentions." :group 'jira)
 
+(defface jira-face-emoji-reference
+  '((t :inherit font-lock-builtin-face))
+  "Face used to show non-standard Jira emoji references."
+  :group 'jira)
+
 (defface jira-face-success
   '((t (:foreground "#fff" :background "#77AA77")))
   "Face used to show success status." :group 'jira)
@@ -210,6 +215,13 @@ COLOR-TODAY is a boolean to color the date if it is today."
 (defun jira-fmt-mention (text)
   "Format TEXT as a mention."
   (propertize text 'face 'jira-face-mention))
+
+(defun jira-fmt-emoji (text)
+  "Format TEXT as an emoji."
+  (if (string-match-p "^:[-a-z_]+:\\'" text)
+      (propertize text 'face 'jira-face-emoji-reference)
+    ;; otherwise, `text' is probably a normal Unicode emoji
+    text))
 
 (defun jira-fmt-with-marks (text marks)
   "Format TEXT using MARKS.
