@@ -58,6 +58,16 @@
     ;; on the 'id attr.
     (jira-fmt-mention text)))
 
+(defun jira-doc--format-date (block)
+  "Format BLOCK, a date node, as a string."
+  (let* ((timestamp (alist-get 'timestamp (alist-get 'attrs block)))
+         ;; 32-bit time_t only requires 10 digits but Jira sends 13?
+         (ts (string-to-number (if (= 13 (length timestamp))
+                                   (subseq timestamp 0 10)
+                                 timestamp)))
+         (s (format-time-string "%F" ts t)))
+    (jira-fmt-date s t)))
+
 (defun jira-doc--marks (block)
   "Return a list of mark attributes from BLOCK."
   (let ((m* '()))
@@ -94,6 +104,9 @@
           ((string= type "emoji")
            (let ((text (alist-get 'text (alist-get 'attrs block))))
              (jira-fmt-emoji text)))
+          ((string= type "date")
+           (jira-doc--format-date (alist-get 'timestamp
+                                             (alist-get 'attrs block))))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text marks))))))
 
