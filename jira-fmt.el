@@ -223,6 +223,24 @@ COLOR-TODAY is a boolean to color the date if it is today."
     ;; otherwise, `text' is probably a normal Unicode emoji
     text))
 
+(defun jira-fmt--color (color-hex)
+  "Return a hex color string usable instead of COLOR-HEX on the current frame."
+  ;; This is easier than importing the whole palette, but maybe we
+  ;; should do that?
+  (let* ((crgb (color-name-to-rgb color-hex))
+         (color-to-use (if (and (color-gray-p color-hex)
+                                (color-dark-p crgb))
+                           (color-complement color-hex)
+                         crgb))
+         (hex (lambda (v)
+                (round (* 255 v)))))
+    (pcase color-to-use
+      (`(,r ,g ,b)
+       (format "#%02x%02x%02x"
+               (funcall hex r)
+               (funcall hex g)
+               (funcall hex b))))))
+
 (defun jira-fmt-with-marks (text marks)
   "Format TEXT using MARKS.
 
@@ -237,7 +255,7 @@ See `jira-doc--marks' for the expected format of MARKS."
         (jira-fmt-code text)
       (let* ((face-attrs (mapcan #'(lambda (x)
                                      (pcase x
-                                       (`(color . ,c) `(:foreground ,c))
+                                       (`(color . ,c) `(:foreground ,(jira-fmt--color c)))
                                        ('strong       '(:weight bold))
                                        ('em           '(:slant italic))
                                        ('underline    '(:underline t))
