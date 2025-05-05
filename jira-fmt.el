@@ -42,6 +42,14 @@
 (defface jira-face-time
   '((t :inherit match)) "Face used to show times." :group 'jira)
 
+(defface jira-face-mention
+  '((t :inherit link)) "Face used to show mentions." :group 'jira)
+
+(defface jira-face-emoji-reference
+  '((t :inherit font-lock-builtin-face))
+  "Face used to show non-standard Jira emoji references."
+  :group 'jira)
+
 (defface jira-face-success
   '((t (:foreground "#fff" :background "#77AA77")))
   "Face used to show success status." :group 'jira)
@@ -57,6 +65,10 @@
 (defface jira-face-tag
   '((t (:foreground "#fff" :background "#999999")))
   "Face used to show tags." :group 'jira)
+
+(defface jira-face-code
+  '((t (:family "Monospace")))
+  "Face used to show code blocks." :group 'jira)
 
 (defcustom jira-statuses-done '("Done" "Closed" "Waiting for QA")
   "A list of statuses names representing done state."
@@ -197,8 +209,72 @@ COLOR-TODAY is a boolean to color the date if it is today."
   (replace-regexp-in-string "\r\n" "\n" text))
 
 (defun jira-fmt-code (text)
-  "Format TEXT as code, with a monospaced font and a light background."
-  (propertize text 'face '(:family "Monospace" :background "#f0f0f0")))
+  "Format TEXT as code."
+  (propertize text 'face 'jira-face-code))
+
+(defun jira-fmt-mention (text)
+  "Format TEXT as a mention."
+  (propertize text 'face 'jira-face-mention))
+
+(defun jira-fmt-emoji (text)
+  "Format TEXT as an emoji."
+  (if (string-match-p "^:[-a-z_]+:\\'" text)
+      (propertize text 'face 'jira-face-emoji-reference)
+    ;; otherwise, `text' is probably a normal Unicode emoji
+    text))
+
+(defun jira-fmt--color (color-hex)
+  "Return a hex color string usable instead of COLOR-HEX on the current frame."
+  ;; This is easier than importing the whole palette, but maybe we
+  ;; should do that?
+  (let* ((crgb (color-name-to-rgb color-hex))
+         (color-to-use (if (and (color-gray-p color-hex)
+                                (color-dark-p crgb))
+                           (color-complement color-hex)
+                         crgb))
+         (hex (lambda (v)
+                (round (* 255 v)))))
+    (pcase color-to-use
+      (`(,r ,g ,b)
+       (format "#%02x%02x%02x"
+               (funcall hex r)
+               (funcall hex g)
+               (funcall hex b))))))
+
+(defun jira-fmt-with-marks (text marks)
+  "Format TEXT using MARKS.
+
+See `jira-doc--marks' for the expected format of MARKS."
+  (if-let* ((url (alist-get 'link marks)))
+      (buttonize text
+                 #'(lambda (_button)
+                     (browse-url url))
+                 nil
+                 url)
+    (if (memq 'code marks)
+        (jira-fmt-code text)
+      (let* ((face-attrs (mapcan #'(lambda (x)
+                                     (pcase x
+                                       (`(color . ,c) `(:foreground ,(jira-fmt--color c)))
+                                       ('strong       '(:weight bold))
+                                       ('em           '(:slant italic))
+                                       ('underline    '(:underline t))
+                                       ('strike       '(:strike-through t))))
+                                 marks))
+             (baseline-offset 0)
+             (display-specs
+              (progn
+                (when (memq 'sub marks)
+                  (cl-decf baseline-offset))
+                (when (memq 'sup marks)
+                  (cl-incf baseline-offset))
+                (and (/= 0 baseline-offset)
+                     `(raise ,baseline-offset)))))
+        (when face-attrs
+          (setq text (propertize text 'face face-attrs)))
+        (when display-specs
+          (setq text (propertize text 'display `(,display-specs))))
+        text))))
 
 (provide 'jira-fmt)
 
