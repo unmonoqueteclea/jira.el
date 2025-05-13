@@ -45,6 +45,11 @@
 (defface jira-face-mention
   '((t :inherit link)) "Face used to show mentions." :group 'jira)
 
+(defface jira-face-blockquote
+  '((t :inherit font-lock-doc-face))
+  "Face used to show Jira blockquotes."
+  :group 'jira)
+
 (defface jira-face-emoji-reference
   '((t :inherit font-lock-builtin-face))
   "Face used to show non-standard Jira emoji references."
@@ -275,6 +280,15 @@ See `jira-doc--marks' for the expected format of MARKS."
         (when display-specs
           (setq text (propertize text 'display `(,display-specs))))
         text))))
+
+(defun jira-fmt-blockquote (text)
+  "Format TEXT as a block quote."
+  (let ((lines (string-split text "\n")))
+    (string-join (mapcar (lambda (line)
+                           (propertize (concat ">  " line)
+                                       'face 'jira-face-blockquote))
+                         lines)
+                 "\n")))
 
 (provide 'jira-fmt)
 

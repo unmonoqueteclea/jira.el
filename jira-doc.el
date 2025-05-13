@@ -137,6 +137,8 @@
       "\n<TABLES NOT SUPPORTED BY jira.el>\n")
      ((string= type "codeBlock")
       (concat "\n" (jira-fmt-code content) "\n"))
+     ((string= type "blockquote")
+      (jira-fmt-blockquote content))
      (t content))))
 
 (defun jira-doc--format-list-block (block)
