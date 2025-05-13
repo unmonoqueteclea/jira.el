@@ -28,6 +28,7 @@
 
 ;;; Code:
 
+(require 'shr)
 (require 'jira-utils)
 
 (defface jira-face-link
@@ -53,6 +54,36 @@
 (defface jira-face-emoji-reference
   '((t :inherit font-lock-builtin-face))
   "Face used to show non-standard Jira emoji references."
+  :group 'jira)
+
+(defface jira-face-h1
+  '((t :inherit shr-h1))
+  "Face used for Jira h1 headings."
+  :group 'jira)
+
+(defface jira-face-h2
+  '((t :inherit shr-h2))
+  "Face used for Jira h2 headings."
+  :group 'jira)
+
+(defface jira-face-h3
+  '((t :inherit shr-h3))
+  "Face used for Jira h3 headings."
+  :group 'jira)
+
+(defface jira-face-h4
+  '((t :inherit shr-h4))
+  "Face used for Jira h4 headings."
+  :group 'jira)
+
+(defface jira-face-h5
+  '((t :inherit shr-h5))
+  "Face used for Jira h5 headings."
+  :group 'jira)
+
+(defface jira-face-h6
+  '((t :inherit shr-h6))
+  "Face used for Jira h6 headings."
   :group 'jira)
 
 (defface jira-face-success
@@ -289,6 +320,15 @@ See `jira-doc--marks' for the expected format of MARKS."
                                        'face 'jira-face-blockquote))
                          lines)
                  "\n")))
+
+(defun jira-fmt-heading (text level)
+  "Format TEXT as a heading of importance LEVEL"
+  (let ((faces [jira-face-h1 jira-face-h2 jira-face-h3
+                jira-face-h4 jira-face-h5 jira-face-h6]))
+    (if (<= 1 level (length faces))
+        (propertize text 'face (aref faces (1- level)))
+      (message "[Jira Fmt Error]: Invalid heading level %s" level)
+      text)))
 
 (provide 'jira-fmt)
 

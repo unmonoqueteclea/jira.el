@@ -120,12 +120,15 @@
   "Format content BLOCK to a string."
   (let* ((type (alist-get 'type block))
          (sep (if (string= type "paragraph") "" "\n"))
-         (prefix (if (string= type "listItem")
-                     (concat (make-string jira-doc--indent ?\ )
-                             (jira-fmt-bold
-                              (funcall jira-doc--list-prefix))
-                             " ")
-                   ""))
+         (prefix (cond ((string= type "listItem")
+                        (concat (make-string jira-doc--indent ?\ )
+                                (jira-fmt-bold
+                                 (funcall jira-doc--list-prefix))
+                                " "))
+                       ((string= type "heading")
+                        "\n")
+                       (t
+                        "")))
 	 (content
 	  (concat prefix
 		  (jira-doc--list-to-str
@@ -139,6 +142,9 @@
       (concat "\n" (jira-fmt-code content) "\n"))
      ((string= type "blockquote")
       (jira-fmt-blockquote content))
+     ((string= type "heading")
+      (jira-fmt-heading content (alist-get 'level
+                                           (alist-get 'attrs block))))
      (t content))))
 
 (defun jira-doc--format-list-block (block)
