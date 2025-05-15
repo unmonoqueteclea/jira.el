@@ -105,8 +105,7 @@
            (let ((text (alist-get 'text (alist-get 'attrs block))))
              (jira-fmt-emoji text)))
           ((string= type "date")
-           (jira-doc--format-date (alist-get 'timestamp
-                                             (alist-get 'attrs block))))
+           (jira-doc--format-date block))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text marks))))))
 
