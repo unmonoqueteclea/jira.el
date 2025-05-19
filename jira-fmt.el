@@ -31,6 +31,17 @@
 (require 'shr)
 (require 'jira-utils)
 
+(defcustom jira-use-color-marks
+  t
+  "If true, display color marks in Jira text.
+
+Note that this only applies to colors specified by the author of the
+text with the \\='Text Color\\=' menu or the {color} markup. Other text
+colors can be controlled by customizing faces in the `jira' group."
+  :type '(choice (const :tag "Use color marks" t)
+                 (const :tag "Do not use color marks" nil))
+  :group 'jira)
+
 (defface jira-face-link
   '((t :inherit link)) "Face used to show links." :group 'jira)
 
@@ -291,7 +302,9 @@ See `jira-doc--marks' for the expected format of MARKS."
         (jira-fmt-code text)
       (let* ((face-attrs (mapcan #'(lambda (x)
                                      (pcase x
-                                       (`(color . ,c) `(:foreground ,(jira-fmt--color c)))
+                                       (`(color . ,c)
+                                        (and jira-use-color-marks
+                                             `(:foreground ,(jira-fmt--color c))))
                                        ('strong       '(:weight bold))
                                        ('em           '(:slant italic))
                                        ('underline    '(:underline t))
