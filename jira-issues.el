@@ -82,7 +82,15 @@ This information is added to worklogs to make it easier to identify")
 (defun jira-issues--data-format-cell (issue field)
   "Format the given FIELD from the given ISSUE."
   (let* ((extracted (jira-table-extract-field jira-issues-fields field issue))
-         (value (or extracted ""))
+         ;; Provide appropriate defaults based on field type instead of always using ""
+         (value (cond
+                 (extracted extracted)
+                 ;; For progress-related fields, default to 0 instead of ""
+                 ((memq field '(:progress-percent :work-ratio)) 0)
+                 ;; For time fields, default to nil instead of ""
+                 ((memq field '(:remaining-time :time-estimate)) nil)
+                 ;; For other fields, keep the original behavior
+                 (t "")))
          (formatter (jira-table-field-formatter jira-issues-fields field)))
     (if formatter (funcall formatter value) (format "%s" value))))
 
