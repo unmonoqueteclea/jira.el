@@ -124,7 +124,7 @@ For example:
   "Face used to show code blocks." :group 'jira)
 
 (defun jira-fmt--alist-p (value)
-  (and (listp value) (or (null value) (consp (car value)))))
+  (and value (listp value) (or (null value) (consp (car value)))))
 
 (defun jira-fmt--link-action (button)
   "Action to open the link in BUTTON."
@@ -141,10 +141,12 @@ For example:
 
 (defun jira-fmt-issue-key-not-tabulated (issue-id)
   "Format ISSUE-ID as a link to the issue in Jira (outside a tabulated list)."
-  (buttonize
-   issue-id
-   (lambda (_data) (interactive)
-     (browse-url (concat jira-base-url "/browse/" issue-id)))))
+  (if (and (stringp issue-id) (not (string-empty-p issue-id)))
+      (buttonize
+       issue-id
+       (lambda (_data) (interactive)
+	 (browse-url (concat jira-base-url "/browse/" issue-id))))
+    ""))
 
 (defun jira-fmt-date (date &optional color-today)
   "Format DATE as `YYYY-MM-DD, Day of week` and adding color for current day.
@@ -160,10 +162,12 @@ COLOR-TODAY is a boolean to color the date if it is today."
 
 (defun jira-fmt-datetime (date)
   "Format an ISO 8601 DATE string into a human-readable format."
-  (let ((parsed-time (date-to-time date)))
-    (propertize
-     (format-time-string "%c" parsed-time)
-     'face 'jira-face-date)))
+  (if (and (stringp date) (not (string-empty-p date)))
+      (let ((parsed-time (date-to-time date)))
+	(propertize
+	 (format-time-string "%c" parsed-time)
+	 'face 'jira-face-date))
+    ""))
 
 (defun jira-fmt-time-from-secs (secs)
   "Format SECS as a string in the form `XhYm`."
@@ -180,11 +184,13 @@ COLOR-TODAY is a boolean to color the date if it is today."
 
 (defun jira-fmt-issue-progress (value)
   "Format progress VALUE as a percentage and adding color."
-  (let*  ((value (if (stringp value) (string-to-number value) value))
-	  (val (concat (if  (= value -1) "0" (format "%s" value)) "%")))
-    (cond ((= value 100) (propertize val  'face 'jira-face-status-done))
-          ((> value 100) (propertize val  'face 'jira-face-status-todo))
-          (t val))))
+  (if value
+      (let*  ((value (if (stringp value) (string-to-number value) value))
+	      (val (concat (if  (= value -1) "0" (format "%s" value)) "%")))
+	(cond ((= value 100) (propertize val  'face 'jira-face-status-done))
+              ((> value 100) (propertize val  'face 'jira-face-status-todo))
+              (t val)))
+    ""))
 
 (defun jira-fmt--status-category-face (category)
   "Return a face based on the CATEGORY string."
@@ -197,22 +203,28 @@ COLOR-TODAY is a boolean to color the date if it is today."
 (defun jira-fmt-issue-status (status)
   "Format STATUS alist adding color based on specific status name.
 Extracts name from the status object."
-  (let* ((status-name (or (alist-get 'name status) "Unknown"))
-	 (category (alist-get 'name (alist-get 'statusCategory status))))
-    (propertize (upcase status-name) 'face
-		(or (cdr (assoc-string status-name jira-status-faces))
-		    (jira-fmt--status-category-face category)))))
+  (if (jira-fmt--alist-p status)
+      (let* ((status-name (or (alist-get 'name status) "Unknown"))
+	     (category (alist-get 'name (alist-get 'statusCategory status))))
+	(propertize (upcase status-name) 'face
+		    (or (cdr (assoc-string status-name jira-status-faces))
+			(jira-fmt--status-category-face category))))
+    ""))
 
 (defun jira-fmt-issue-status-category (category)
   "Format CATEGORY string adding color based on the value."
-  (propertize category 'face (jira-fmt--status-category-face category)))
+  (if (and (stringp category) (not (string-empty-p category)))
+      (propertize category 'face (jira-fmt--status-category-face category))
+    ""))
 
 (defun jira-fmt-truncate (len str)
   "Truncate STR to LEN characters, removing any line breaks."
-  (let ((cleaned-str (replace-regexp-in-string "[\n\r]" " " str)))
-    (if (> (length cleaned-str) len)
-        (concat (substring cleaned-str 0 (- len 3)) "...")
-      cleaned-str)))
+  (if (and (stringp str) (not (string-empty-p str)))
+      (let ((cleaned-str (replace-regexp-in-string "[\n\r]" " " str)))
+	(if (> (length cleaned-str) len)
+            (concat (substring cleaned-str 0 (- len 3)) "...")
+	  cleaned-str))
+    ""))
 
 (defun jira-fmt-issue-fix-versions (value)
   "Extract a list of fix versions from VALUE."
@@ -236,103 +248,120 @@ Extracts name from the status object."
 
 (defun jira-fmt-issue-type-name (value)
   "Format issue type VALUE."
-  (propertize value 'face 'bold))
+  (if (and (stringp value) (not (string-empty-p value)))
+      (propertize value 'face 'bold)
+    ""))
 
 (defun jira-fmt-bold (value)
   "Format VALUE as bold."
-  (propertize value 'face 'bold))
+  (if (and (stringp value) (not (string-empty-p value)))
+      (propertize value 'face 'bold)
+    ""))
 
 (defun jira-fmt-line-endings (text)
   "Convert Windows line endings to Unix ones in the given TEXT."
-  (replace-regexp-in-string "\r\n" "\n" text))
+  (if (and (stringp text) (not (string-empty-p text)))
+      (replace-regexp-in-string "\r\n" "\n" text)
+    ""))
 
 (defun jira-fmt-code (text)
   "Format TEXT as code."
-  (propertize text 'face 'jira-face-code))
+  (if (and (stringp text) (not (string-empty-p text)))
+      (propertize text 'face 'jira-face-code)
+    ""))
 
 (defun jira-fmt-mention (text)
   "Format TEXT as a mention."
-  (propertize text 'face 'jira-face-mention))
+  (if (and (stringp text) (not (string-empty-p text)))
+      (propertize text 'face 'jira-face-mention)
+    ""))
 
 (defun jira-fmt-emoji (text)
   "Format TEXT as an emoji."
-  (if (string-match-p "^:[-a-z_]+:\\'" text)
-      (propertize text 'face 'jira-face-emoji-reference)
-    ;; otherwise, `text' is probably a normal Unicode emoji
-    text))
+  (if (and (stringp text) (not (string-empty-p text)))
+      (if (string-match-p "^:[-a-z_]+:\\'" text)
+	  (propertize text 'face 'jira-face-emoji-reference)
+	;; otherwise, `text' is probably a normal Unicode emoji
+	text)
+    ""))
 
 (defun jira-fmt--color (color-hex)
   "Return a hex color string usable instead of COLOR-HEX on the current frame."
   ;; This is easier than importing the whole palette, but maybe we
   ;; should do that?
-  (let* ((crgb (color-name-to-rgb color-hex))
-         (color-to-use (if (and (color-gray-p color-hex)
-                                (color-dark-p crgb))
-                           (color-complement color-hex)
-                         crgb))
-         (hex (lambda (v)
-                (round (* 255 v)))))
-    (pcase color-to-use
-      (`(,r ,g ,b)
-       (format "#%02x%02x%02x"
-               (funcall hex r)
-               (funcall hex g)
-               (funcall hex b))))))
+  (if (and (stringp color-hex) (not (string-empty-p color-hex)))
+      (let* ((crgb (color-name-to-rgb color-hex))
+             (color-to-use (if (and (color-gray-p color-hex)
+                                    (color-dark-p crgb))
+                               (color-complement color-hex)
+                             crgb))
+             (hex (lambda (v)
+                    (round (* 255 v)))))
+	(pcase color-to-use
+	  (`(,r ,g ,b)
+	   (format "#%02x%02x%02x"
+		   (funcall hex r)
+		   (funcall hex g)
+		   (funcall hex b)))))
+    ""))
 
 (defun jira-fmt-with-marks (text marks)
   "Format TEXT using MARKS.
-
 See `jira-doc--marks' for the expected format of MARKS."
-  (if-let* ((url (alist-get 'link marks)))
-      (buttonize text
-                 #'(lambda (_button)
-                     (browse-url url))
-                 nil
-                 url)
-    (if (memq 'code marks)
-        (jira-fmt-code text)
-      (let* ((face-attrs (mapcan #'(lambda (x)
+  (if (and (stringp text) (not (string-empty-p text)))
+      (let ((clean-text (substring-no-properties text)))
+	(if-let ((url (alist-get 'link marks)))
+            (buttonize clean-text (lambda (_button) (browse-url url)) nil url)
+	  (if (memq 'code marks)
+              (jira-fmt-code clean-text)
+            (let* ((face-attrs
+                    (apply #'append
+			   (mapcar (lambda (x)
                                      (pcase x
                                        (`(color . ,c)
-                                        (and jira-use-color-marks
-                                             `(:foreground ,(jira-fmt--color c))))
-                                       ('strong       '(:weight bold))
-                                       ('em           '(:slant italic))
-                                       ('underline    '(:underline t))
-                                       ('strike       '(:strike-through t))))
-                                 marks))
-             (baseline-offset 0)
-             (display-specs
-              (progn
-                (when (memq 'sub marks)
-                  (cl-decf baseline-offset))
-                (when (memq 'sup marks)
-                  (cl-incf baseline-offset))
-                (and (/= 0 baseline-offset)
-                     `(raise ,baseline-offset)))))
-        (when face-attrs
-          (setq text (propertize text 'face face-attrs)))
-        (when display-specs
-          (setq text (propertize text 'display `(,display-specs))))
-        text))))
+					(when jira-use-color-marks
+					  `(:foreground ,(jira-fmt--color c))))
+                                       ('strong '(:weight bold))
+                                       ('em     '(:slant italic))
+                                       ('underline '(:underline t))
+                                       ('strike '(:strike-through t))
+                                       (_ nil)))
+				   marks)))
+		   (baseline-offset 0))
+              (when (memq 'sub marks)
+		(cl-decf baseline-offset))
+              (when (memq 'sup marks)
+		(cl-incf baseline-offset))
+              (let ((props (append
+                            (when face-attrs (list 'face face-attrs))
+                            (when (/= baseline-offset 0)
+                              (list 'display `(raise ,baseline-offset))))))
+		(apply #'propertize clean-text props))))))
+    ""))
+
+
 
 (defun jira-fmt-blockquote (text)
   "Format TEXT as a block quote."
-  (let ((lines (string-split text "\n")))
-    (string-join (mapcar (lambda (line)
-                           (propertize (concat ">  " line)
-                                       'face 'jira-face-blockquote))
-                         lines)
-                 "\n")))
+  (if (and (stringp text) (not (string-empty-p text)))
+      (let ((lines (string-split text "\n")))
+	(string-join (mapcar (lambda (line)
+                               (propertize (concat ">  " line)
+					   'face 'jira-face-blockquote))
+                             lines)
+                     "\n"))
+    ""))
 
 (defun jira-fmt-heading (text level)
   "Format TEXT as a heading of importance LEVEL."
-  (let ((faces [jira-face-h1 jira-face-h2 jira-face-h3
-                jira-face-h4 jira-face-h5 jira-face-h6]))
-    (if (<= 1 level (length faces))
-        (propertize text 'face (aref faces (1- level)))
-      (message "[Jira Fmt Error]: Invalid heading level %s" level)
-      text)))
+  (if (and (stringp text) (not (string-empty-p text)))
+        (let ((faces [jira-face-h1 jira-face-h2 jira-face-h3
+				   jira-face-h4 jira-face-h5 jira-face-h6]))
+	  (if (<= 1 level (length faces))
+              (propertize text 'face (aref faces (1- level)))
+	    (message "[Jira Fmt Error]: Invalid heading level %s" level)
+	    text))
+    ""))
 
 (provide 'jira-fmt)
 
