@@ -35,18 +35,26 @@
 
 ;; these blocks contain the content property
 (defconst jira-doc--top-level-blocks
-  '("blockquote" "bulletList" "codeBlock" "expand" "heading" "mediaGroup"
-    "mediaSingle" "orderedList" "panel" "paragraph" "rule" "table"
+  '("blockquote"
+    "bulletList"
+    "codeBlock"
+    "expand"
+    "heading"
+    "mediaGroup"
+    "mediaSingle"
+    "orderedList"
+    "panel"
+    "paragraph"
+    "rule"
+    "table"
     "multiBodiedExtension"))
 
 ;; these blocks contain the content property
 (defconst jira-doc--child-blocks
-  '("listItem" "media" "nestedExpand" "tableCell" "tableHeader"
-    "tableRow" "extensionFrame"))
+  '("listItem" "media" "nestedExpand" "tableCell" "tableHeader" "tableRow" "extensionFrame"))
 
 (defconst jira-doc--inline-blocks
-  '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
-    "text" "mediaInline"))
+  '("date" "emoji" "hardBreak" "inlineCard" "mention" "status" "text" "mediaInline"))
 
 (defun jira-doc--list-to-str (items sep)
   "Concatenate ITEMS with SEP."
@@ -63,7 +71,10 @@
   "Format BLOCK, a date node, as a string."
   (let* ((timestamp (alist-get 'timestamp (alist-get 'attrs block)))
          ;; 32-bit time_t only requires 10 digits but Jira sends 13?
-	 (correct-ts (if (= 13 (length timestamp)) (cl-subseq timestamp 0 10) timestamp))
+         (correct-ts
+          (if (= 13 (length timestamp))
+              (cl-subseq timestamp 0 10)
+            timestamp))
          (ts (string-to-number correct-ts))
          (s (format-time-string "%F" ts t)))
     (message "The timestamp is %s" timestamp)
@@ -72,71 +83,76 @@
 (defun jira-doc--marks (block)
   "Return a list of mark attributes from BLOCK."
   (let ((m* '()))
-    (mapc (lambda (mark)
-            (let ((type (alist-get 'type mark))
-                  (attrs (alist-get 'attrs mark)))
-              (pcase type
-                ("link"
-                 (let ((url (alist-get 'href attrs)))
-                   (push `(link . ,url) m*)))
-                ("subsup"
-                 (let ((subsup (alist-get 'type attrs)))
-                   (push (intern subsup) m*)))
-                ("textColor"
-                 (let ((c (alist-get 'color attrs)))
-                   (push `(color . ,c) m*)))
-                ((or "code" "em" "strike" "strong" "underline")
-                 (push (intern type) m*))
-                (_
-                 (message "[Jira Doc Error]: Ignoring unrecognized text mark %s" mark)))))
-          (alist-get 'marks block))
+    (mapc
+     (lambda (mark)
+       (let ((type (alist-get 'type mark))
+             (attrs (alist-get 'attrs mark)))
+         (pcase type
+           ("link" (let ((url (alist-get 'href attrs)))
+              (push `(link . ,url) m*)))
+           ("subsup" (let ((subsup (alist-get 'type attrs)))
+              (push (intern subsup) m*)))
+           ("textColor" (let ((c (alist-get 'color attrs)))
+              (push `(color . ,c) m*)))
+           ((or "code" "em" "strike" "strong" "underline") (push (intern type) m*))
+           (_ (message "[Jira Doc Error]: Ignoring unrecognized text mark %s" mark)))))
+     (alist-get 'marks block))
     m*))
 
-(defun jira-doc--format-inline-block(block)
+(defun jira-doc--format-inline-block (block)
   "Format inline BLOCK to a string."
   (let ((type (alist-get 'type block))
         (text (alist-get 'text block)))
-    (cond ((string= type "hardBreak") "\n")
-          ((string= type "inlineCard")
-           (let* ((url (alist-get 'url (alist-get 'attrs block))))
-             (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
-          ((string= type "mention")
-           (jira-doc--format-mention block))
-          ((string= type "emoji")
-           (let ((text (alist-get 'text (alist-get 'attrs block))))
-             (jira-fmt-emoji text)))
-          ((string= type "date")
-           (jira-doc--format-date block))
-          (text (let ((marks (jira-doc--marks block)))
-                  (jira-fmt-with-marks text marks))))))
+    (cond
+     ((string= type "hardBreak")
+      "\n")
+     ((string= type "inlineCard")
+      (let* ((url (alist-get 'url (alist-get 'attrs block))))
+        (buttonize
+         url
+         `(lambda (data)
+            (interactive)
+            (browse-url ,url)))))
+     ((string= type "mention")
+      (jira-doc--format-mention block))
+     ((string= type "emoji")
+      (let ((text (alist-get 'text (alist-get 'attrs block))))
+        (jira-fmt-emoji text)))
+     ((string= type "date")
+      (jira-doc--format-date block))
+     (text
+      (let ((marks (jira-doc--marks block)))
+        (jira-fmt-with-marks text marks))))))
 
-(defvar jira-doc--indent
-  0
+(defvar jira-doc--indent 0
   "Curent indentation level for list item nodes.")
 
-(defvar jira-doc--list-prefix
-  nil
+(defvar jira-doc--list-prefix nil
   "A thunk returning a prefix for list item nodes.")
 
-(defun jira-doc--format-content-block(block)
+(defun jira-doc--format-content-block (block)
   "Format content BLOCK to a string."
   (let* ((type (alist-get 'type block))
-         (sep (if (string= type "paragraph") "" "\n"))
-         (prefix (cond ((string= type "listItem")
-                        (concat (make-string jira-doc--indent ?\ )
-                                (jira-fmt-bold
-                                 (funcall jira-doc--list-prefix))
-                                " "))
-                       ((string= type "heading")
-                        "\n")
-                       (t
-                        "")))
-	 (content
-	  (concat prefix
-		  (jira-doc--list-to-str
-		   (mapcar (lambda (b) (jira-doc--format-block b))
-			   (alist-get 'content block))
-                   sep))))
+         (sep
+          (if (string= type "paragraph")
+              ""
+            "\n"))
+         (prefix
+          (cond
+           ((string= type "listItem")
+            (concat
+             (make-string jira-doc--indent ?\ )
+             (jira-fmt-bold (funcall jira-doc--list-prefix))
+             " "))
+           ((string= type "heading")
+            "\n")
+           (t
+            "")))
+         (content
+          (concat
+           prefix
+           (jira-doc--list-to-str
+            (mapcar (lambda (b) (jira-doc--format-block b)) (alist-get 'content block)) sep))))
     (cond
      ((string= type "table")
       "\n<TABLES NOT SUPPORTED BY jira.el>\n")
@@ -145,9 +161,9 @@
      ((string= type "blockquote")
       (jira-fmt-blockquote content))
      ((string= type "heading")
-      (jira-fmt-heading content (alist-get 'level
-                                           (alist-get 'attrs block))))
-     (t content))))
+      (jira-fmt-heading content (alist-get 'level (alist-get 'attrs block))))
+     (t
+      content))))
 
 (defun jira-doc--format-list-block (block)
   "Format BLOCK, an orderedList or bulletList, to a string."
@@ -155,9 +171,7 @@
          (jira-doc--list-prefix
           (cond
            ((string= type "orderedList")
-            (let ((start (alist-get 'order
-                                    (alist-get 'attrs block)
-                                    1)))
+            (let ((start (alist-get 'order (alist-get 'attrs block) 1)))
               (lambda ()
                 (prog1 (format "%s." start)
                   (cl-incf start)))))
@@ -168,17 +182,16 @@
          (jira-doc--indent (+ 4 jira-doc--indent)))
     (jira-doc--format-content-block block)))
 
-(defun jira-doc--format-block(block)
+(defun jira-doc--format-block (block)
   "Format BLOCK to a string."
   (let ((type (alist-get 'type block)))
-    (cond ((or (string= type "orderedList")
-               (string= type "bulletList"))
-           (jira-doc--format-list-block block))
-          ((or (member type jira-doc--top-level-blocks)
-               (member type jira-doc--child-blocks))
-           (jira-doc--format-content-block block))
-          (t
-           (jira-doc--format-inline-block block)))))
+    (cond
+     ((or (string= type "orderedList") (string= type "bulletList"))
+      (jira-doc--format-list-block block))
+     ((or (member type jira-doc--top-level-blocks) (member type jira-doc--child-blocks))
+      (jira-doc--format-content-block block))
+     (t
+      (jira-doc--format-inline-block block)))))
 
 (defun jira-doc-format (doc)
   "Format DOC in Jira Document Format to a string."
@@ -186,18 +199,18 @@
       (jira-fmt-line-endings doc)
     (let* ((content (alist-get 'content doc)))
       (jira-doc--list-to-str
-       (mapcar (lambda (block) (jira-doc--format-block block)) content)
-       "\n"))))
+       (mapcar (lambda (block) (jira-doc--format-block block)) content) "\n"))))
 
 (defun jira-doc-build (text)
   "Build a simple Jira document (ADF) from TEXT."
   (let* ((lines (split-string (or text "") "\n" t)))
-    `(("type" . "doc") ("version" . 1)
+    `(("type" . "doc")
+      ("version" . 1)
       ("content" .
-       ,(mapcar (lambda (line)
-                  `(("type" . "paragraph")
-                    ("content" . ((("type" . "text") ("text" . ,line))))))
-                lines)))))
+       ,(mapcar
+         (lambda (line)
+           `(("type" . "paragraph") ("content" . ((("type" . "text") ("text" . ,line))))))
+         lines)))))
 
 (provide 'jira-doc)
 

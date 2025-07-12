@@ -40,16 +40,24 @@
 (require 'jira-detail)
 
 (defcustom jira-issues-table-fields
-  '(:key :issue-type-name :status-name :assignee-name
-         :progress-percent :work-ratio :remaining-time :summary)
+  '(:key
+    :issue-type-name
+    :status-name
+    :assignee-name
+    :progress-percent
+    :work-ratio
+    :remaining-time
+    :summary)
   "Fields to show in the Jira issues table.
 
 Allowed values in variable jira-issues-fields."
-  :group 'jira :type 'list)
+  :group 'jira
+  :type 'list)
 
 (defcustom jira-issues-max-results 50
   "Maximum number of Jira issues to retrieve."
-  :group 'jira :type 'integer)
+  :group 'jira
+  :type 'integer)
 
 ;; files that we always want to retrieve because they are used
 ;; in some operations
@@ -62,17 +70,16 @@ This information is added to worklogs to make it easier to identify")
 (defun jira-issues--api-get-issues (jql callback)
   "Retrieve issues from the given JQL filter and call CALLBACK function."
   (let* ((parent (lambda (fd) (jira-table-field-parent jira-issues-fields fd)))
-         (fields (append (mapcar parent jira-issues-table-fields)
-			 jira-issues-required-fields)))
+         (fields (append (mapcar parent jira-issues-table-fields) jira-issues-required-fields)))
     (when jira-debug
-        (message (concat "Get issues with jql " jql)))
+      (message (concat "Get issues with jql " jql)))
     (jira-api-call
      "GET" "search"
-     :params `(("jql" . ,jql)
-               ("maxResults" . ,jira-issues-max-results)
-               ("startAt" . 0)
-               ("fields" . ,(mapconcat (lambda (x) (format "%s" x))
-                                       (cl-remove nil fields) ",")))
+     :params
+     `(("jql" . ,jql)
+       ("maxResults" . ,jira-issues-max-results)
+       ("startAt" . 0)
+       ("fields" . ,(mapconcat (lambda (x) (format "%s" x)) (cl-remove nil fields) ",")))
      :callback callback)))
 
 (defun jira-issues--api-filters-and (filters)
@@ -84,7 +91,9 @@ This information is added to worklogs to make it easier to identify")
   (let* ((extracted (jira-table-extract-field jira-issues-fields field issue))
          (value (or extracted ""))
          (formatter (jira-table-field-formatter jira-issues-fields field)))
-    (if formatter (funcall formatter value) (format "%s" value))))
+    (if formatter
+        (funcall formatter value)
+      (format "%s" value))))
 
 (defun jira-issues--data-format-issue (issue)
   "Format the given ISSUE."
@@ -95,17 +104,17 @@ This information is added to worklogs to make it easier to identify")
 (defun jira-issues--store-key-summary (issue)
   "Store the KEY and SUMMARY of the given ISSUE."
   (let ((key (jira-table-extract-field jira-issues-fields :key issue))
-	(summary (jira-table-extract-field jira-issues-fields :summary issue)))
+        (summary (jira-table-extract-field jira-issues-fields :summary issue)))
     (puthash key summary jira-issues-key-summary-map)))
 
 (defun jira-issues-store-issues-info (issues)
   "Store the KEY and SUMMARY of the given ISSUES."
   (let ((map (make-hash-table :test 'equal)))
     (cl-loop
-     for issue across issues
-     do (let ((key (jira-table-extract-field jira-issues-fields :key issue))
-              (summary (jira-table-extract-field jira-issues-fields :summary issue)))
-          (puthash key summary map)))
+     for issue across issues do
+     (let ((key (jira-table-extract-field jira-issues-fields :key issue))
+           (summary (jira-table-extract-field jira-issues-fields :summary issue)))
+       (puthash key summary map)))
     map))
 
 (defun jira-issues--refresh-table (data _response)
@@ -128,12 +137,19 @@ This information is added to worklogs to make it easier to identify")
     (jira-issues--api-get-issues
      (or jql
          (jira-issues--api-filters-and
-          (list (when myself "assignee = currentUser()")
-                (when current-sprint "sprint in openSprints()")
-                (when status (concat "status = \"" status "\""))
-                (when project (concat "project = \"" project "\""))
-                (when resolution (concat "resolution = \"" resolution "\""))
-                (when version (concat "fixversion = \"" version "\"")))))
+          (list
+           (when myself
+             "assignee = currentUser()")
+           (when current-sprint
+             "sprint in openSprints()")
+           (when status
+             (concat "status = \"" status "\""))
+           (when project
+             (concat "project = \"" project "\""))
+           (when resolution
+             (concat "resolution = \"" resolution "\""))
+           (when version
+             (concat "fixversion = \"" version "\"")))))
      #'jira-issues--refresh-table)))
 
 (defun jira-issues--filter-invalid-if-jql ()
@@ -141,94 +157,119 @@ This information is added to worklogs to make it easier to identify")
   (if transient-current-command
       (transient-arg-value "--jql=" (transient-args transient-current-command))))
 
-(transient-define-prefix jira-issues-menu ()
-  "Show menu for listing Jira Issues."
-   :refresh-suffixes t
-   :value '("--myself")
-   [["Arguments"
-    ("m" "Just from myself" "--myself"
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql)
-    ("c" "Just from current sprint" "--current-sprint"
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql)
-    ("s" "Status" "--status="
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql
-     :choices
-     (lambda () (mapcar (lambda (st) (car st)) jira-statuses)))
-    ("p" "Project" "--project="
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql
-     :choices
-     (lambda () (mapcar (lambda (prj) (car prj)) jira-projects)))
-    ("r" "Resolution" "--resolution="
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql
-     :choices
-     (lambda () (mapcar (lambda (res) (car res)) jira-resolutions)))
-    ("j""JQL filter" "--jql="
-     :transient transient--do-call)
-    ("v" "Fix Versions" "--version="
-     :transient t
-     :inapt-if jira-issues--filter-invalid-if-jql
-     :choices
-     (lambda () (apply #'append (mapcar #'cdr jira-projects-versions))))]
-   ["Arguments Help"
-    ("C-x" :info (concat (propertize "Check " 'face 'italic)
-                         "additional options"))
-    ("C-x s" :info (concat (propertize "Set" 'face 'italic)
-                           " current arguments for Emacs session"))
-    ("C-x C-s" :info (concat (propertize "Persist" 'face 'italic)
-                             " current arguments for all Emacs sessions"))
-    ("C-x C-k" :info (concat (propertize "Reset" 'face 'italic)
-                           " arguments to default ones"))]]
+(transient-define-prefix
+ jira-issues-menu () "Show menu for listing Jira Issues."
+ :refresh-suffixes t
+ :value '("--myself")
+ [["Arguments"
+   ("m" "Just from myself" "--myself" :transient t :inapt-if jira-issues--filter-invalid-if-jql)
+   ("c"
+    "Just from current sprint"
+    "--current-sprint"
+    :transient t
+    :inapt-if jira-issues--filter-invalid-if-jql)
+   ("s"
+    "Status"
+    "--status="
+    :transient t
+    :inapt-if jira-issues--filter-invalid-if-jql
+    :choices (lambda () (mapcar (lambda (st) (car st)) jira-statuses)))
+   ("p"
+    "Project"
+    "--project="
+    :transient t
+    :inapt-if jira-issues--filter-invalid-if-jql
+    :choices (lambda () (mapcar (lambda (prj) (car prj)) jira-projects)))
+   ("r"
+    "Resolution"
+    "--resolution="
+    :transient t
+    :inapt-if jira-issues--filter-invalid-if-jql
+    :choices (lambda () (mapcar (lambda (res) (car res)) jira-resolutions)))
+   ("j" "JQL filter" "--jql=" :transient transient--do-call)
+   ("v"
+    "Fix Versions"
+    "--version="
+    :transient t
+    :inapt-if jira-issues--filter-invalid-if-jql
+    :choices (lambda () (apply #'append (mapcar #'cdr jira-projects-versions))))]
+  ["Arguments Help"
+   ("C-x" :info (concat (propertize "Check " 'face 'italic) "additional options"))
+   ("C-x s" :info (concat (propertize "Set" 'face 'italic) " current arguments for Emacs session"))
+   ("C-x C-s"
+    :info (concat (propertize "Persist" 'face 'italic) " current arguments for all Emacs sessions"))
+   ("C-x C-k" :info (concat (propertize "Reset" 'face 'italic) " arguments to default ones"))]]
 
-  ["Actions"
-   ("l" "List Jira Issues" tablist-revert)])
+ ["Actions" ("l" "List Jira Issues" tablist-revert)])
 
 (defun jira-issues--jump-to-tempo ()
   "Jump to Tempo worklogs, closing current buffer."
   (kill-buffer (buffer-name))
   (jira-tempo))
 
-(transient-define-prefix jira-issues-actions-menu ()
-  "Show menu for actions on Jira Issues."
-  [[:description "Jira Issues List"
-                ("?" "Show this menu" jira-issues-actions-menu)
-                ("g" "Refresh list" tablist-revert)
-                ("l" "List Jira Issues menu" jira-issues-menu)
-		("f" "Find issue by key/url"
-		 (lambda () (interactive) (jira-detail-find-issue-by-key)))
-		("T" "Jump to Tempo worklogs"
-		 (lambda () (interactive) (jira-issues--jump-to-tempo)))]]
-  [[:description
-    (lambda () (jira-utils-transient-description "Actions on issue"))
-    :inapt-if-not jira-utils-marked-item
-    ("c" "Copy selected issue id to clipboard"
-     (lambda () (interactive)
-       (jira-actions-copy-issues-id-to-clipboard (jira-utils-marked-item))))
-    ("C" "Change issue" jira-actions-change-issue-menu)
-    ("I" "Show issue information"
-     (lambda () (interactive) (jira-detail-show-issue (jira-utils-marked-item))))
-    ("O" "Open issue in browser"
-     (lambda () (interactive) (jira-actions-open-issue (jira-utils-marked-item))))
-    ("W" "Add worklog to issue" jira-actions-add-worklog-menu)]])
+(transient-define-prefix
+ jira-issues-actions-menu () "Show menu for actions on Jira Issues."
+ [[:description
+   "Jira Issues List"
+   ("?" "Show this menu" jira-issues-actions-menu)
+   ("g" "Refresh list" tablist-revert)
+   ("l" "List Jira Issues menu" jira-issues-menu)
+   ("f" "Find issue by key/url"
+    (lambda ()
+      (interactive)
+      (jira-detail-find-issue-by-key)))
+   ("T" "Jump to Tempo worklogs"
+    (lambda ()
+      (interactive)
+      (jira-issues--jump-to-tempo)))]]
+ [[:description
+   (lambda () (jira-utils-transient-description "Actions on issue"))
+   :inapt-if-not jira-utils-marked-item
+   ("c" "Copy selected issue id to clipboard"
+    (lambda ()
+      (interactive)
+      (jira-actions-copy-issues-id-to-clipboard (jira-utils-marked-item))))
+   ("C" "Change issue" jira-actions-change-issue-menu)
+   ("I" "Show issue information"
+    (lambda ()
+      (interactive)
+      (jira-detail-show-issue (jira-utils-marked-item))))
+   ("O" "Open issue in browser"
+    (lambda ()
+      (interactive)
+      (jira-actions-open-issue (jira-utils-marked-item))))
+   ("W" "Add worklog to issue" jira-actions-add-worklog-menu)]])
 
 (defvar jira-issues-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "?" 'jira-issues-actions-menu)
     (define-key map "l" 'jira-issues-menu)
-    (define-key map "T" (lambda () (interactive) (jira-issues--jump-to-tempo)))
-    (define-key map "f" (lambda () (interactive) (jira-detail-find-issue-by-key)))
-    (define-key map (kbd "c")
-		(lambda () (interactive)
-		  (jira-actions-copy-issues-id-to-clipboard (jira-utils-marked-item))))
+    (define-key
+     map "T"
+     (lambda ()
+       (interactive)
+       (jira-issues--jump-to-tempo)))
+    (define-key
+     map "f"
+     (lambda ()
+       (interactive)
+       (jira-detail-find-issue-by-key)))
+    (define-key
+     map (kbd "c")
+     (lambda ()
+       (interactive)
+       (jira-actions-copy-issues-id-to-clipboard (jira-utils-marked-item))))
     (define-key map "C" 'jira-actions-change-issue-menu)
-    (define-key map "I" (lambda () (interactive)
-                          (jira-detail-show-issue (jira-utils-marked-item))))
-    (define-key map "O" (lambda () (interactive)
-                          (jira-actions-open-issue (jira-utils-marked-item))))
+    (define-key
+     map "I"
+     (lambda ()
+       (interactive)
+       (jira-detail-show-issue (jira-utils-marked-item))))
+    (define-key
+     map "O"
+     (lambda ()
+       (interactive)
+       (jira-actions-open-issue (jira-utils-marked-item))))
     (define-key map "W" 'jira-actions-add-worklog-menu)
     map)
   "Keymap for `jira-issues-mode'.")
@@ -242,21 +283,24 @@ This information is added to worklogs to make it easier to identify")
   (jira-api-get-basic-data)
   (tablist-revert))
 
-(define-derived-mode jira-issues-mode tabulated-list-mode "Jira Issues"
-  "Major mode for listing Jira issues."
-  :interactive nil
-  (let* ((name (lambda (fd) (jira-table-field-name jira-issues-fields fd)))
-         (columns (lambda (fd) (jira-table-field-columns jira-issues-fields fd)))
-         (col-info (lambda (fd) (list (funcall name fd) (funcall columns fd) t))))
-    (setq tabulated-list-format
-          (vconcat (mapcar col-info jira-issues-table-fields))))
+(define-derived-mode
+ jira-issues-mode
+ tabulated-list-mode
+ "Jira Issues"
+ "Major mode for listing Jira issues."
+ :interactive
+ nil
+ (let* ((name (lambda (fd) (jira-table-field-name jira-issues-fields fd)))
+        (columns (lambda (fd) (jira-table-field-columns jira-issues-fields fd)))
+        (col-info (lambda (fd) (list (funcall name fd) (funcall columns fd) t))))
+   (setq tabulated-list-format (vconcat (mapcar col-info jira-issues-table-fields))))
 
-  (setq tabulated-list-sort-key (cons "Status" nil))
-  (setq tabulated-list-padding 2)
-  (add-hook 'tabulated-list-revert-hook #'jira-issues--refresh nil t)
-  (add-hook 'jira-issues-changed-hook #'tablist-revert)
-  (tabulated-list-init-header)
-  (tablist-minor-mode))
+ (setq tabulated-list-sort-key (cons "Status" nil))
+ (setq tabulated-list-padding 2)
+ (add-hook 'tabulated-list-revert-hook #'jira-issues--refresh nil t)
+ (add-hook 'jira-issues-changed-hook #'tablist-revert)
+ (tabulated-list-init-header)
+ (tablist-minor-mode))
 
 (provide 'jira-issues)
 

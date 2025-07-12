@@ -39,30 +39,31 @@
 (declare-function jira-issues "jira-issues")
 
 (defvar jira-tempo-fields
-  '((:key . ((:path . (tempoWorklogId))
-               (:columns . 10)
-               (:name . "Key")
-               (:formatter . jira-fmt-issue-key)))
-    (:time . ((:path . (timeSpentSeconds))
-               (:columns . 10)
-               (:name . "Time")
-               (:formatter . jira-fmt-time-from-secs)))
-    (:date . ((:path . (startDate))
-               (:columns . 18)
-               (:name . "Date")
-               (:formatter . (lambda (v) (jira-fmt-date v t)))))
-    (:description . ((:path . (description))
-               (:columns . 70)
-               (:name . "Issue description"))))
+  '((:key
+     .
+     ((:path . (tempoWorklogId)) (:columns . 10) (:name . "Key") (:formatter . jira-fmt-issue-key)))
+    (:time
+     .
+     ((:path . (timeSpentSeconds))
+      (:columns . 10)
+      (:name . "Time")
+      (:formatter . jira-fmt-time-from-secs)))
+    (:date
+     .
+     ((:path . (startDate))
+      (:columns . 18)
+      (:name . "Date")
+      (:formatter . (lambda (v) (jira-fmt-date v t)))))
+    (:description . ((:path . (description)) (:columns . 70) (:name . "Issue description"))))
   "Fields that can be shown in the tabulated list.")
 
-(defvar jira-tempo-table-fields
-  '(:key :time :date :description)
+(defvar jira-tempo-table-fields '(:key :time :date :description)
   "Tempo fields to show in the tabulated list.")
 
 (defcustom jira-tempo-max-results 50
   "Maximum number of Tempo worklogs to retrieve."
-  :group 'jira :type 'integer)
+  :group 'jira
+  :type 'integer)
 
 (defun jira-tempo--api-get-worklogs (callback)
   "Get worklogs for the current user.
@@ -70,14 +71,17 @@
 CALLBACK is a function that will be called with the worklogs data."
   (let ((start-end (jira-utils-week-start-and-end (current-time))))
     (jira-api-tempo-call
-     "GET" (concat "worklogs/user/" jira-account-id)
+     "GET"
+     (concat "worklogs/user/" jira-account-id)
      :params `(("from" . ,(car start-end)) ("to" . ,(car (cdr start-end))))
      :callback callback)))
 
 (defun jira-tempo--api-delete-worklog (worklog-id)
   "Delete a worklog with WORKLOG-ID."
-  (jira-api-tempo-call "DELETE" (concat "worklogs/" worklog-id)
-     :callback (lambda (_data _response) (tablist-revert))))
+  (jira-api-tempo-call
+   "DELETE"
+   (concat "worklogs/" worklog-id)
+   :callback (lambda (_data _response) (tablist-revert))))
 
 (defun jira-tempo--data-accumulate-time-per-day (worklogs)
   "Accumulate time per day from WORKLOGS."
@@ -94,7 +98,9 @@ CALLBACK is a function that will be called with the worklogs data."
   (let* ((extracted (jira-table-extract-field jira-tempo-fields field worklog))
          (formatter (jira-table-field-formatter jira-tempo-fields field))
          (value (format "%s" (or extracted ""))))
-    (if formatter (funcall formatter value) value)))
+    (if formatter
+        (funcall formatter value)
+      value)))
 
 (defun jira-tempo--data-format-worklogs (worklogs)
   "Format WORKLOGS for tabulated list."
@@ -105,11 +111,8 @@ CALLBACK is a function that will be called with the worklogs data."
               (formatter (lambda (field) (jira-tempo--data-format-cell worklog field)))
               (date (jira-table-extract-field jira-tempo-fields :date worklog))
               (accumulated-time
-               (jira-fmt-time-from-secs
-                (number-to-string (gethash date time-per-day 0)))))
-         (list key (vconcat
-                    (vector accumulated-time)
-                    (mapcar formatter jira-tempo-table-fields)))))
+               (jira-fmt-time-from-secs (number-to-string (gethash date time-per-day 0)))))
+         (list key (vconcat (vector accumulated-time) (mapcar formatter jira-tempo-table-fields)))))
      worklogs)))
 
 (defun jira-tempo--refresh-table (data _response)
@@ -128,32 +131,37 @@ CALLBACK is a function that will be called with the worklogs data."
   (kill-buffer (buffer-name))
   (jira-issues))
 
-(transient-define-prefix jira-tempo-menu ()
-  "Show menu for actions on Jira Tempo worklogs."
-  [["Jira Tempo Worklogs List"
-    ("?" "Show this menu" jira-tempo-menu)
-    ("g" "Refresh list" tablist-revert)
-    ("I" "Jump to issues"
-     (lambda () (interactive) (jira-tempo--jump-to-issues)))]]
-  [[:description
-    (lambda () (jira-utils-transient-description "Actions on selected worklog"))
-    :inapt-if-not jira-utils-marked-item
-    ("D" "Delete worklog"
-     (lambda () (interactive)
-       (jira-tempo--api-delete-worklog
-        (format "%s"(jira-utils-marked-item)))))]]
-  (interactive)
-  (transient-setup 'jira-tempo-menu))
+(transient-define-prefix
+ jira-tempo-menu () "Show menu for actions on Jira Tempo worklogs."
+ [["Jira Tempo Worklogs List"
+   ("?" "Show this menu" jira-tempo-menu)
+   ("g" "Refresh list" tablist-revert)
+   ("I" "Jump to issues"
+    (lambda ()
+      (interactive)
+      (jira-tempo--jump-to-issues)))]]
+ [[:description
+   (lambda () (jira-utils-transient-description "Actions on selected worklog"))
+   :inapt-if-not jira-utils-marked-item
+   ("D" "Delete worklog"
+    (lambda ()
+      (interactive)
+      (jira-tempo--api-delete-worklog (format "%s" (jira-utils-marked-item)))))]]
+ (interactive) (transient-setup 'jira-tempo-menu))
 
 (defvar jira-tempo-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "?" 'jira-tempo-menu)
-    (define-key map "I"
-		(lambda () (interactive) (jira-tempo--jump-to-issues)))
-    (define-key map "D"
-                (lambda () (interactive)
-                  (jira-tempo--api-delete-worklog
-                   (format "%s"(jira-utils-marked-item)))))
+    (define-key
+     map "I"
+     (lambda ()
+       (interactive)
+       (jira-tempo--jump-to-issues)))
+    (define-key
+     map "D"
+     (lambda ()
+       (interactive)
+       (jira-tempo--api-delete-worklog (format "%s" (jira-utils-marked-item)))))
     map)
   "Keymap for `jira-tempo-mode'.")
 
@@ -164,24 +172,28 @@ CALLBACK is a function that will be called with the worklogs data."
   (switch-to-buffer "*Jira Tempo*")
   (jira-api-get-account-id :callback #'jira-tempo-mode))
 
-(define-derived-mode jira-tempo-mode tabulated-list-mode "Jira Tempo"
-  "Major mode for handling a list of Jira Tempo Worklogs."
-  :interactive  nil
-  (setq tabulated-list-entries '())
-  (let ((name (lambda (fd) (jira-table-field-name jira-tempo-fields fd)))
-        (columns (lambda (fd) (jira-table-field-columns jira-tempo-fields fd))))
-    (setq tabulated-list-format
-          (vconcat '[("Time (Day)" 15 t)]
-                   (mapcar
-                    (lambda (field)
-                      (list (funcall name field) (funcall columns field) t))
-                    jira-tempo-table-fields))))
-  (setq tabulated-list-padding 2)
-  (add-hook 'tabulated-list-revert-hook #'jira-tempo--refresh nil t)
-  (tabulated-list-init-header)
-  (tablist-minor-mode)
-  (tabulated-list-revert)
-  (tablist-revert))
+(define-derived-mode
+ jira-tempo-mode
+ tabulated-list-mode
+ "Jira Tempo"
+ "Major mode for handling a list of Jira Tempo Worklogs."
+ :interactive
+ nil
+ (setq tabulated-list-entries '())
+ (let ((name (lambda (fd) (jira-table-field-name jira-tempo-fields fd)))
+       (columns (lambda (fd) (jira-table-field-columns jira-tempo-fields fd))))
+   (setq tabulated-list-format
+         (vconcat
+          '[("Time (Day)" 15 t)]
+          (mapcar
+           (lambda (field) (list (funcall name field) (funcall columns field) t))
+           jira-tempo-table-fields))))
+ (setq tabulated-list-padding 2)
+ (add-hook 'tabulated-list-revert-hook #'jira-tempo--refresh nil t)
+ (tabulated-list-init-header)
+ (tablist-minor-mode)
+ (tabulated-list-revert)
+ (tablist-revert))
 
 (provide 'jira-tempo)
 

@@ -50,50 +50,62 @@
          (date (transient-arg-value "--date=" args))
          (time (transient-arg-value "--time=" args))
          (adjust-estimate
-          (if (and estimate (not (string-empty-p estimate))) "new" "auto")))
+          (if (and estimate (not (string-empty-p estimate)))
+              "new"
+            "auto")))
     (jira-api-call
-     "POST" (concat "issue/"(jira-utils-marked-item) "/worklog")
-     :params `(("notifyUsers" . ,(if notify "true" "false"))
-               ("adjustEstimate" . ,adjust-estimate)
-               ,@(when (string= adjust-estimate "new")
-                   `(("newEstimate" . ,estimate))))
-     :data `(("started" . ,date)
-             ("comment" . (("type" . "doc")
-                           ("version" . 1)
-                           ("content" . ((("type" . "paragraph")
-                                          ("content" . ((("type" . "text")
-                                                         ("text" . ,comment)))))))))
-             ("timeSpent" . ,time))
-     :callback (lambda (_data _response)
-                  (kill-buffer "*Jira Issues*")
-                  (jira-tempo)))))
+     "POST" (concat "issue/" (jira-utils-marked-item) "/worklog")
+     :params
+     `(("notifyUsers" .
+        ,(if notify
+             "true"
+           "false"))
+       ("adjustEstimate" . ,adjust-estimate) ,@
+       (when (string= adjust-estimate "new")
+         `(("newEstimate" . ,estimate))))
+     :data
+     `(("started" . ,date)
+       ("comment" .
+        (("type" . "doc")
+         ("version" . 1)
+         ("content"
+          .
+          ((("type" . "paragraph") ("content" . ((("type" . "text") ("text" . ,comment)))))))))
+       ("timeSpent" . ,time))
+     :callback
+     (lambda (_data _response)
+       (kill-buffer "*Jira Issues*")
+       (jira-tempo)))))
 
-(transient-define-prefix jira-actions-add-worklog-menu ()
-  "Show menu for adding a Worklog to a Jira Issue."
-  :value (lambda () `
-           (,(concat "--comment=" (jira-utils-marked-item)
-                     ": " (jira-actions--marked-issue-description))
-            ,(concat "--date="
-                     (format-time-string "%FT%T.%3N%z" (current-time)))
-            "--time=1h"))
-  ["Arguments"
-   ("n" "Notify users" "--notify-users")
-   ("e" "New estimate" "--new-estimate=")
-   ("c" "Comment" "--comment=")
-   ("d" "Date" "--date="
-    :reader (lambda (&rest _)
-	      (completing-read
-	       "Choose an option: "
-	       (jira-utils-last-n-dates (current-time) 7)
-	       nil nil nil 'transient-history)))
+(transient-define-prefix
+ jira-actions-add-worklog-menu () "Show menu for adding a Worklog to a Jira Issue."
+ :value
+ (lambda ()
+   `(,(concat "--comment=" (jira-utils-marked-item) ": " (jira-actions--marked-issue-description))
+     ,(concat "--date=" (format-time-string "%FT%T.%3N%z" (current-time)))
+     "--time=1h"))
+ ["Arguments"
+  ("n" "Notify users" "--notify-users")
+  ("e" "New estimate" "--new-estimate=")
+  ("c" "Comment" "--comment=")
+  ("d" "Date" "--date="
+   :reader
+   (lambda (&rest _)
+     (completing-read "Choose an option: " (jira-utils-last-n-dates (current-time) 7)
+                      nil
+                      nil
+                      nil
+                      'transient-history)))
   ("t" "Time Spent" "--time=")]
-  ["Actions"
-   ("a" "Add worklog" (lambda () (interactive) (jira-actions--add-worklog)))]
+ ["Actions" ("a" "Add worklog"
+   (lambda ()
+     (interactive)
+     (jira-actions--add-worklog)))]
 
-  (interactive)
-  (if (jira-utils-marked-item)
-      (transient-setup 'jira-actions-add-worklog-menu)
-    (message "Run jira-issues first")))
+ (interactive)
+ (if (jira-utils-marked-item)
+     (transient-setup 'jira-actions-add-worklog-menu)
+   (message "Run jira-issues first")))
 
 (defun jira-actions--change-issue ()
   "Apply user-selected options to marked issue."
@@ -102,49 +114,56 @@
          (resolution (transient-arg-value "--resolution=" args))
          (status-id (cdr (assoc status jira-active-issue-transitions)))
          (time-estimate (transient-arg-value "--remaining-time-estimate=" args))
-         (hook (lambda (_data _response)
-                 (cond ((eq major-mode 'jira-issues-mode)
-                        (run-hooks 'jira-issues-changed-hook))
-                       ((eq major-mode 'jira-detail-mode)
-                        (run-hooks 'jira-detail-changed-hook))))))
+         (hook
+          (lambda (_data _response)
+            (cond
+             ((eq major-mode 'jira-issues-mode)
+              (run-hooks 'jira-issues-changed-hook))
+             ((eq major-mode 'jira-detail-mode)
+              (run-hooks 'jira-detail-changed-hook))))))
     (when status-id
       (jira-api-call
-       "POST" (concat "issue/" (jira-utils-marked-item) "/transitions")
+       "POST"
+       (concat "issue/" (jira-utils-marked-item) "/transitions")
        :data `(("transition" . (("id" . ,status-id))))
        :callback hook))
     (when (or resolution time-estimate)
       (jira-api-call
        "PUT" (concat "issue/" (jira-utils-marked-item))
-       :data `(("fields" .
-                ,(let (fields)
-                   (when resolution
-		     (if (string-equal resolution "Unresolved")
-			 (push `( "resolution" . nil) fields)
-		       (push `( "resolution" . (("name" . ,resolution))) fields)))
-                   (when time-estimate
-                     (push `( "timetracking" . (("remainingEstimate" . ,time-estimate))) fields))
-                   fields)))
+       :data
+       `(("fields" .
+          ,(let (fields)
+             (when resolution
+               (if (string-equal resolution "Unresolved")
+                   (push `("resolution" . nil) fields)
+                 (push `("resolution" . (("name" . ,resolution))) fields)))
+             (when time-estimate
+               (push `("timetracking" . (("remainingEstimate" . ,time-estimate))) fields))
+             fields)))
        :callback hook))))
 
-(transient-define-prefix jira-actions-change-issue-menu ()
-  "Show menu for updating a Jira Issue."
-  ["Arguments"
-   ("s" "Status" "--status="
-    :choices
-    (lambda () (mapcar (lambda (tr) (car tr)) jira-active-issue-transitions)))
-   ("r" "Resolution" "--resolution="
-    :choices
-    (lambda () (mapcar (lambda (res) (car res)) jira-resolutions)))
-   ("e" "Time Estimate" "--remaining-time-estimate=")]
-  ["Actions"
-   ("c" "Change" (lambda () (interactive) (jira-actions--change-issue)))]
+(transient-define-prefix
+ jira-actions-change-issue-menu () "Show menu for updating a Jira Issue."
+ ["Arguments" ("s"
+   "Status"
+   "--status="
+   :choices (lambda () (mapcar (lambda (tr) (car tr)) jira-active-issue-transitions)))
+  ("r"
+   "Resolution"
+   "--resolution="
+   :choices (lambda () (mapcar (lambda (res) (car res)) jira-resolutions)))
+  ("e" "Time Estimate" "--remaining-time-estimate=")]
+ ["Actions" ("c" "Change"
+   (lambda ()
+     (interactive)
+     (jira-actions--change-issue)))]
 
-  (interactive)
-  (if (jira-utils-marked-item)
-      (progn  ;; retrieve possible statuses transtions
-        (jira-api-get-transitions (jira-utils-marked-item))
-        (transient-setup 'jira-actions-change-issue-menu))
-    (message "Run jira-issues first")))
+ (interactive)
+ (if (jira-utils-marked-item)
+     (progn ;; retrieve possible statuses transtions
+       (jira-api-get-transitions (jira-utils-marked-item))
+       (transient-setup 'jira-actions-change-issue-menu))
+   (message "Run jira-issues first")))
 
 (defun jira-actions-open-issue (issue-key)
   "Open ISSUE-KEY in browser."
@@ -156,17 +175,19 @@
   (jira-api-call
    "POST" (concat "issue/" issue-key "/comment")
    :data `(("body" . ,(jira-doc-build text)))
-   :callback (lambda (_data _response)
-               (message "Comment added to %s" issue-key)
-	       (funcall callback))))
+   :callback
+   (lambda (_data _response)
+     (message "Comment added to %s" issue-key)
+     (funcall callback))))
 
 (defun jira-actions-delete-comment (issue-key comment-id callback)
   "Delete the comment COMMENT-ID from ISSUE-KEY and run CALLBACK when done."
   (jira-api-call
    "DELETE" (concat "issue/" issue-key "/comment/" comment-id)
-   :callback (lambda (_data _response)
-               (message "Comment %s deleted" comment-id)
-               (funcall callback))))
+   :callback
+   (lambda (_data _response)
+     (message "Comment %s deleted" comment-id)
+     (funcall callback))))
 
 (defun jira-actions-copy-issues-id-to-clipboard (issue-key)
   "Copy ISSUE-KEY to the clipboard."
