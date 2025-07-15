@@ -35,6 +35,7 @@
 (require 'jira-doc)
 (require 'jira-tempo)
 (require 'jira-utils)
+(require 'jira-users)
 
 (defun jira-actions--marked-issue-description ()
   "Get the description of the marked issue from `jira-issues-key-summary-map'."
@@ -173,6 +174,30 @@
   (when issue-key
     (kill-new issue-key)
     (message "Copied issue ID: %s" issue-key)))
+
+(defun jira-actions-add-watcher (issue-key callback)
+  "Add a user as a watcher to ISSUE-KEY."
+  (pcase (jira-users-read-user "Add watcher: ")
+    (`(,name ,id)
+     (jira-api-call "POST"
+                    (format "issue/%s/watchers" issue-key)
+                    :data id
+                    :callback
+                    (lambda (_data _response)
+                      (message "Added %s as a watcher." name)
+                      (funcall callback))))))
+
+(defun jira-actions-remove-watcher (issue-key callback)
+  "Remove a user as a watcher to ISSUE-KEY."
+  (pcase (jira-users-read-user "Remove watcher: ")
+    (`(,name ,id)
+     (jira-api-call "DEL"
+                    (format "issue/%s/watchers" issue-key)
+                    :params `(("accountId" . ,id))
+                    :callback
+                    (lambda (_data _response)
+                      (message "Removed %s as a watcher." name)
+                      (funcall callback))))))
 
 (provide 'jira-actions)
 

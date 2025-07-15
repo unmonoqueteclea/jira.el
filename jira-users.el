@@ -68,6 +68,14 @@ If FORCE is non-nil, re-fetches the user list.
                              data)))
       (setq jira-users table))))
 
+(defun jira-users-read-user (prompt)
+  "Complete a Jira username with PROMPT.
+
+Returns a list: (NAME ACCOUNT-ID)."
+  (let* ((name (completing-read prompt jira-users))
+         (account-id (gethash name jira-users)))
+    (list name account-id)))
+
 (provide 'jira-users)
 
 ;;; jira-users.el ends here
