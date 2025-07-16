@@ -530,7 +530,7 @@
    ("P" "Show parent issue" (lambda () (interactive) (jira-detail--show-parent-issue)))
    ("U" "Update issue field"
     (lambda () (interactive) (jira-detail--update-field)))
-   ("w" "Watchers" jira-detail--watchers-menu)
+   ("w" "Update watchers" jira-detail--watchers-menu)
    ("f" "Find issue by key/url"
     (lambda () (interactive) (jira-detail-find-issue-by-key)))
    ("c" "Copy selected issue id to clipboard"
