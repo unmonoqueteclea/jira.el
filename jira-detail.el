@@ -218,6 +218,11 @@
               (insert "Press " (propertize "?" 'face 'jira-face-date) " to open transient menu, ")
               (insert "and " (propertize "U" 'face 'jira-face-date) " to update a field.")
               (insert "\n----------------------------------------------------------------\n\n"))))
+        (magit-insert-section (other nil nil)
+          (magit-insert-heading "➕ Other")
+          (magit-insert-section-body
+            (jira-detail--watchers key)
+            (insert "\n\n")))
         (magit-insert-section (description nil nil)
           (magit-insert-heading "📄 Description")
           (magit-insert-section-body
@@ -394,6 +399,24 @@
     (normal-mode)
     (set-buffer-modified-p t)))
 
+(defun jira-detail--watchers (key)
+  "Show the watchers list of issue with KEY."
+  (jira-api-call "GET"
+                 (format "issue/%s/watchers" key)
+                 :sync t
+                 :callback
+                 (lambda (data _response)
+                   (jira-detail--show-watchers data))))
+
+(defun jira-detail--show-watchers (watchers-data)
+  (let ((users (alist-get 'watchers watchers-data)))
+    (insert (jira-detail--header "Watchers")
+            (string-join (mapcar (lambda (u)
+                                   (alist-get 'displayName u))
+                                 users)
+                         ", ")
+            "\n")))
+
 (defun jira-detail-show-issue (key)
   "Retrieve and show the detail information of the issue with KEY."
   (jira-api-call
@@ -478,6 +501,20 @@
   (let ((key (jira-complete-ask-issue)))
     (when key (jira-detail-show-issue key))))
 
+(transient-define-prefix jira-detail--watchers-menu ()
+  "Transient menu for adding or removing watchers to an issue."
+  ["Watchers"
+   ("+" "Add watcher"
+    (lambda () (interactive)
+      (jira-actions-add-watcher jira-detail--current-key
+                                (lambda ()
+                                  (jira-detail-show-issue jira-detail--current-key)))))
+   ("-" "Remove watcher"
+    (lambda () (interactive)
+      (jira-actions-remove-watcher jira-detail--current-key
+                                   (lambda ()
+                                     (jira-detail-show-issue jira-detail--current-key)))))])
+
 (transient-define-prefix jira-detail--actions-menu ()
   "Show menu for actions on Jira Detail."
   ["Comments"
@@ -493,6 +530,7 @@
    ("P" "Show parent issue" (lambda () (interactive) (jira-detail--show-parent-issue)))
    ("U" "Update issue field"
     (lambda () (interactive) (jira-detail--update-field)))
+   ("w" "Watchers" jira-detail--watchers-menu)
    ("f" "Find issue by key/url"
     (lambda () (interactive) (jira-detail-find-issue-by-key)))
    ("c" "Copy selected issue id to clipboard"
@@ -521,6 +559,7 @@
     (define-key map (kbd "U")
       (lambda () "Update issue field"
 	(interactive) (jira-detail--update-field)))
+    (define-key map (kbd "w") 'jira-detail--watchers-menu)
     (define-key map (kbd "f")
       (lambda () "Find issue by key"
         (interactive) (jira-detail-find-issue-by-key)))

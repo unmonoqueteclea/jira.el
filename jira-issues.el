@@ -38,6 +38,7 @@
 (require 'jira-tempo)
 (require 'jira-actions)
 (require 'jira-detail)
+(require 'jira-users)
 
 (defcustom jira-issues-table-fields
   '(:key :issue-type-name :status-name :assignee-name
@@ -240,6 +241,7 @@ This information is added to worklogs to make it easier to identify")
   (switch-to-buffer "*Jira Issues*")
   (jira-issues-mode)
   (jira-api-get-basic-data)
+  (jira-users-get-users)
   (tablist-revert))
 
 (define-derived-mode jira-issues-mode tabulated-list-mode "Jira Issues"
