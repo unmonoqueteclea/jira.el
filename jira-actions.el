@@ -191,7 +191,7 @@
   "Remove a user as a watcher to ISSUE-KEY."
   (pcase (jira-users-read-user "Remove watcher: ")
     (`(,name ,id)
-     (jira-api-call "DEL"
+     (jira-api-call "DELETE"
                     (format "issue/%s/watchers" issue-key)
                     :params `(("accountId" . ,id))
                     :callback
