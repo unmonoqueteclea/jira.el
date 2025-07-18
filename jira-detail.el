@@ -218,11 +218,6 @@
               (insert "Press " (propertize "?" 'face 'jira-face-date) " to open transient menu, ")
               (insert "and " (propertize "U" 'face 'jira-face-date) " to update a field.")
               (insert "\n----------------------------------------------------------------\n\n"))))
-        (magit-insert-section (other nil nil)
-          (magit-insert-heading "➕ Other")
-          (magit-insert-section-body
-            (jira-detail--watchers key)
-            (insert "\n\n")))
         (magit-insert-section (description nil nil)
           (magit-insert-heading "📄 Description")
           (magit-insert-section-body
@@ -230,6 +225,7 @@
             (insert "\n\n")))))
     (jira-detail--show-attachments key issue)
     (jira-detail--show-subtasks key issue)
+    (jira-detail--show-other key)
     (jira-detail--show-comments key)
     (pop-to-buffer (current-buffer))))
 
@@ -398,6 +394,14 @@
     (goto-char (point-min))
     (normal-mode)
     (set-buffer-modified-p t)))
+
+(defun jira-detail--show-other (key)
+  (let ((inhibit-read-only t))
+    (magit-insert-section (other nil nil)
+      (magit-insert-heading "➕ Other")
+      (magit-insert-section-body
+        (jira-detail--watchers key)
+        (insert "\n\n")))))
 
 (defun jira-detail--watchers (key)
   "Show the watchers list of issue with KEY."
