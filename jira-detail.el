@@ -401,15 +401,17 @@
 
 (defun jira-detail--watchers (key)
   "Show the watchers list of issue with KEY."
-  (jira-api-call "GET"
-                 (format "issue/%s/watchers" key)
-                 :sync t
-                 :callback
-                 (lambda (data _response)
-                   (jira-detail--show-watchers data))))
+  (let ((where (point)))
+    (jira-api-call "GET"
+                   (format "issue/%s/watchers" key)
+                   :callback
+                   (lambda (data _response)
+                     (jira-detail--show-watchers data where)))))
 
-(defun jira-detail--show-watchers (watchers-data)
-  (let ((users (alist-get 'watchers watchers-data)))
+(defun jira-detail--show-watchers (watchers-data point)
+  (let ((users (alist-get 'watchers watchers-data))
+        (inhibit-read-only t))
+    (goto-char point)
     (insert (jira-detail--header "Watchers")
             (string-join (mapcar (lambda (u)
                                    (alist-get 'displayName u))
