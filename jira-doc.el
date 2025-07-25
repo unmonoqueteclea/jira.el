@@ -216,6 +216,66 @@
        (mapcar (lambda (block) (jira-doc--format-block block)) content)
        "\n"))))
 
+(defun jira-doc--collect-marks (text)
+  "Remove Jira marks from TEXT.
+
+Return un-marked text and a list of applicable marks."
+  (let ((marks '())
+        done)
+    (while (not done)
+      (let (any-matched)
+        (dolist (m jira-marks-delimiters)
+          (pcase m
+            (`(,start ,end ,type)
+             (when (and (string-prefix-p start text)
+                        (string-suffix-p end text))
+               (setq text (substring text
+                                     (length start)
+                                     (- (length text)
+                                        (length end)))
+                     marks (cons type marks)
+                     any-matched t)))))
+        (unless any-matched
+          (setq done t))))
+    (cl-values text marks)))
+
+(defun jira-doc--build-text (text)
+  "Split TEXT into a list of ADF text nodes with marks."
+  (let ((mark-regexp (concat "\\("
+                             (string-join (mapcar #'(lambda (d)
+                                                      (pcase d
+                                                        (`(,start ,end ,_type)
+                                                         (concat (regexp-quote start)
+                                                                 ".+?"
+                                                                 (regexp-quote end)))))
+                                                  jira-marks-delimiters)
+                                          "\\|")
+                             "\\)"))
+        (areas '())
+        (i 0))
+    (while (and (< i (length text))
+                (string-match mark-regexp text i))
+      (unless (= (match-beginning 0) i)
+        (push (substring text
+                         i
+                         (match-beginning 0))
+              areas))
+      (push (match-string 0 text) areas)
+      (setq i (match-end 0)))
+    (unless (= i (length text))
+      (push (substring text i) areas))
+    (mapcar (lambda (a)
+              (pcase (jira-doc--collect-marks a)
+                (`(,body ,marks)
+                 `(("type" . "text")
+                   ("text" . ,body)
+                   ,@(when marks
+                       `(("marks" . ,(apply #'vector
+                                            (mapcar (lambda (mark)
+                                                      `(("type" . ,mark)))
+                                                    marks)))))))))
+            (nreverse areas))))
+
 (defun jira-doc-build (text)
   "Build a simple Jira document (ADF) from TEXT."
   (let* ((lines (split-string (or text "") "\n" t)))
@@ -223,7 +283,7 @@
       ("content" .
        ,(mapcar (lambda (line)
                   `(("type" . "paragraph")
-                    ("content" . ((("type" . "text") ("text" . ,line))))))
+                    ("content" ,@(jira-doc--build-text line))))
                 lines)))))
 
 (provide 'jira-doc)

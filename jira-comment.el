@@ -16,10 +16,8 @@
   "Face for Jira inserted markup."
   :group 'jira)
 
-(defvar jira-font-lock-keywords
-  `((,(rx "[~" (*? (not "]")) "]")
-     . 'jira-face-mention)
-    (,(rx "[" (*? (not "]")) "]")
+(defvar jira-mark-keywords
+  `((,(rx "[" (*? (not "]")) "]")
      . 'jira-face-link)
     (,(rx "{{" (*? (not "}")) "}}")
      . 'jira-face-code)
@@ -32,7 +30,11 @@
     (,(rx bow "-" (+? (not "-")) "-")
      0 'jira-face-deleted prepend)
     (,(rx "+" (+? not-newline) "+")
-     0 'jira-face-inserted prepend)
+     0 'jira-face-inserted prepend)))
+
+(defvar jira-block-keywords
+  `((,(rx "[~" (*? (not "]")) "]")
+     . 'jira-face-mention)
     (,(rx "bq. " (+ not-newline))
      0 'jira-face-blockquote prepend)
     (,(rx ":" (+ (or lower digit "-")) ":")
@@ -51,6 +53,20 @@
      . 'jira-face-h5)
     (,(rx bol "h6. " (*? not-newline) eol)
      . 'jira-face-h6)))
+
+(defvar jira-font-lock-keywords
+  (append jira-block-keywords
+          jira-mark-keywords))
+
+(defvar jira-marks-delimiters
+  `(("`"  "`"  code)
+    ("{{" "}}" code)
+    ("_"  "_"  em)
+    ("["  "]"  link)
+    ("-"  "-"  strike)
+    ("*"  "*"  strong)
+    ("+"  "+"  underline))
+  "List matching the start of a group of text marks.")
 
 (define-derived-mode jira-comment-mode text-mode
   "Jira Comment"
