@@ -17,13 +17,7 @@
   :group 'jira)
 
 (defvar jira-mark-keywords
-  `((,(rx "[" (*? (not "]")) "]")
-     . 'jira-face-link)
-    (,(rx "{{" (*? (not "}")) "}}")
-     . 'jira-face-code)
-    (,(rx "`" (+? (not "`")) "`")
-     . 'jira-face-code)
-    (,(rx bow "*" (+? not-newline) "*" eow)
+  `((,(rx bow "*" (+? not-newline) "*" eow)
      0 'bold prepend)
     (,(rx bow "_" (+? not-newline) "_" eow)
      0 'italic prepend)
@@ -32,13 +26,28 @@
     (,(rx "+" (+? not-newline) "+")
      0 'jira-face-inserted prepend)))
 
+(defvar jira-link-regexp
+  (rx "[" (submatch (*? (not "]"))) "]"))
+
+(defvar jira-code-regexp
+  (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
+          (seq "{{" (submatch-n 1 (*? (not "}"))) "}}"))))
+
+(defvar jira-mention-regexp
+  (rx "[~" (submatch (*? (not "]"))) "]"))
+
+(defvar jira-emoji-regexp
+  (rx ":" (submatch (+ (or lower digit "-"))) ":"))
+
+(defvar jira-inline-block-keywords
+  `((,jira-mention-regexp . 'jira-face-mention)
+    (,jira-link-regexp . 'jira-face-link)
+    (,jira-code-regexp . 'jira-face-code)
+    (,jira-emoji-regexp 0 'jira-face-emoji-reference prepend)))
+
 (defvar jira-block-keywords
-  `((,(rx "[~" (*? (not "]")) "]")
-     . 'jira-face-mention)
-    (,(rx "bq. " (+ not-newline))
+  `((,(rx "bq. " (+ not-newline))
      0 'jira-face-blockquote prepend)
-    (,(rx ":" (+ (or lower digit "-")) ":")
-     0 'jira-face-emoji-reference prepend)
     (,(rx bol (submatch (+ (or "*" "#" "-"))) " ")
      . font-lock-builtin-face)
     (,(rx bol "h1. " (*? not-newline) eol)
@@ -56,13 +65,11 @@
 
 (defvar jira-font-lock-keywords
   (append jira-block-keywords
+          jira-inline-block-keywords
           jira-mark-keywords))
 
 (defvar jira-marks-delimiters
-  `(("`"  "`"  code)
-    ("{{" "}}" code)
-    ("_"  "_"  em)
-    ("["  "]"  link)
+  `(("_"  "_"  em)
     ("-"  "-"  strike)
     ("*"  "*"  strong)
     ("+"  "+"  underline))
