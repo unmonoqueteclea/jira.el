@@ -32,7 +32,7 @@
 
 (require 'cl-lib)
 (require 'jira-fmt)
-(require 'jira-users)
+(require 'jira-api)
 
 ;; these blocks contain the content property
 (defconst jira-doc--top-level-blocks
@@ -48,6 +48,16 @@
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
     "text" "mediaInline"))
+
+(defconst jira-doc--marks-delimiters
+  ;; link and code are not included here because their structure is
+  ;; not like other marks. See comment in
+  ;; `jira-doc-build-inline-blocks'.
+  `(("_" em)
+    ("-" strike)
+    ("*" strong)
+    ("+" underline))
+  "List matching the start of a group of text marks.")
 
 (defun jira-doc--list-to-str (items sep)
   "Concatenate ITEMS with SEP."
@@ -228,15 +238,15 @@ Return un-marked text and a list of applicable marks."
         done)
     (while (not done)
       (let (any-matched)
-        (dolist (m jira-marks-delimiters)
+        (dolist (m jira-doc--marks-delimiters)
           (pcase m
-            (`(,start ,end ,type)
-             (when (and (string-prefix-p start text)
-                        (string-suffix-p end text))
+            (`(,delim ,type)
+             (when (and (string-prefix-p delim text)
+                        (string-suffix-p delim text))
                (setq text (substring text
-                                     (length start)
+                                     (length delim)
                                      (- (length text)
-                                        (length end)))
+                                        (length delim)))
                      marks (cons type marks)
                      any-matched t)))))
         (unless any-matched
@@ -271,12 +281,9 @@ not match are returned as-is."
   "Split TEXT into a list of ADF text nodes with marks."
   (let* ((mark-regexp (concat "\\("
                               (string-join (mapcar #'(lambda (d)
-                                                       (pcase d
-                                                         (`(,start ,end ,_type)
-                                                          (concat (regexp-quote start)
-                                                                  ".+?"
-                                                                  (regexp-quote end)))))
-                                                   jira-marks-delimiters)
+                                                       (let ((delim (regexp-quote (car d))))
+                                                         (concat delim ".+?" delim)))
+                                                   jira-doc--marks-delimiters)
                                            "\\|")
                               "\\)"))
          (areas (jira-doc--split (list text)

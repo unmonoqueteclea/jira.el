@@ -97,13 +97,6 @@
           jira-inline-block-keywords
           jira-mark-keywords))
 
-(defvar jira-marks-delimiters
-  `(("_"  "_"  em)
-    ("-"  "-"  strike)
-    ("*"  "*"  strong)
-    ("+"  "+"  underline))
-  "List matching the start of a group of text marks.")
-
 (defun jira-comment-insert-mention ()
   "Insert a mention at point, prompting for a username."
   (interactive)
