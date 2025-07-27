@@ -56,7 +56,13 @@
   `(("_" em)
     ("-" strike)
     ("*" strong)
-    ("+" underline))
+    ("+" underline)
+    ("^" (("type" . "subsup")
+          ("attrs" .
+           ("type" . "sup"))))
+    ("~" (("type" . "subsup")
+          ("attrs" .
+           ("type" . "sub")))))
   "List matching the start of a group of text marks.")
 
 (defun jira-doc--list-to-str (items sep)

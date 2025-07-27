@@ -53,7 +53,13 @@
     (,(rx bow "-" (+? (not "-")) "-")
      0 'jira-face-deleted prepend)
     (,(rx "+" (+? not-newline) "+")
-     0 'jira-face-inserted prepend)))
+     0 'jira-face-inserted prepend)
+    ;; can't display subscript or superscript: AFAICT font-lock
+    ;; shouldn't manage the 'display text property.
+    (,(rx "^" (+? not-newline) "^")
+     0 'font-lock-builtin-face prepend)
+    (,(rx "~" (+? not-newline) "~")
+     0 'font-lock-builtin-face prepend)))
 
 (defvar jira-link-regexp
   (rx "[" (submatch (*? (not "]"))) "]"))
