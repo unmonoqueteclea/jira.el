@@ -30,6 +30,8 @@
 (eval-when-compile
   (require 'rx))
 
+(require 'jira-users)
+
 (defvar-local jira-comment--callback nil
   "The callback function to call after adding a comment.")
 
@@ -102,12 +104,20 @@
     ("+"  "+"  underline))
   "List matching the start of a group of text marks.")
 
+(defun jira-comment-insert-mention ()
+  "Insert a mention at point, prompting for a username."
+  (interactive)
+  (pcase (jira-users-read-user "Mention user: ")
+    (`(,name ,_id)
+     (insert (concat "[~" name "]")))))
+
 (defvar-keymap jira-comment-mode-map
   "C-c C-c" #'(lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
                 (funcall jira-comment--callback))
-  "C-c C-k" 'kill-buffer)
+  "C-c C-k" 'kill-buffer
+  "C-c m"   'jira-comment-insert-mention)
 
 (define-derived-mode jira-comment-mode text-mode
   "Jira Comment"
