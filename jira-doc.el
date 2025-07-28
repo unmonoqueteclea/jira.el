@@ -353,6 +353,23 @@ NAME should be a username defined in `jira-users'."
     ("attrs" .
      (("shortName" . ,name)))))
 
+(defun jira-doc--build-blockquote (quoted-text)
+  `(("type" . "blockquote")
+    ("content" .
+     (("type" . "paragraph")
+      ("content" .
+       ,(jira-doc-build-inline-blocks quoted-text))))))
+
+(defun jira-doc--build-heading (heading-text)
+  "Make an ADF heading node."
+  (let ((level (aref heading-text 0))
+        (content (substring heading-text 3))) ; skip "[1-6]. "
+    `(("type" . "heading")
+      ("attrs" .
+       (("level" . ,(- level ?0))))
+      ("content" .
+       ,(jira-doc-build-inline-blocks content)))))
+
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
@@ -376,6 +393,20 @@ NAME should be a username defined in `jira-users'."
                 (list s)))
             blocks)))
 
+(defun jira-doc-build-toplevel-blocks (text)
+  "Parse toplevel blocks out of TEXT and convert to ADF nodes."
+  (let ((blocks (jira-doc--split (list text)
+                                 jira-blockquote-regexp
+                                 #'jira-doc--build-blockquote)))
+    (setq blocks (jira-doc--split blocks
+                                  jira-heading-regexp
+                                  #'jira-doc--build-heading))
+    (mapcan (lambda (s)
+              (if (stringp s)
+                  (jira-doc-build-inline-blocks s)
+                (list s)))
+            blocks)))
+
 (defun jira-doc-build (text)
   "Build a simple Jira document (ADF) from TEXT."
   (let* ((lines (split-string (or text "") "\n" t)))
@@ -383,7 +414,7 @@ NAME should be a username defined in `jira-users'."
       ("content" .
        ,(mapcar (lambda (line)
                   `(("type" . "paragraph")
-                    ("content" ,@(jira-doc-build-inline-blocks line))))
+                    ("content" ,@(jira-doc-build-toplevel-blocks line))))
                 lines)))))
 
 (provide 'jira-doc)

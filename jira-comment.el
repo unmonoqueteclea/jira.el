@@ -80,11 +80,19 @@
     (,jira-code-regexp . 'jira-face-code)
     (,jira-emoji-regexp 0 'jira-face-emoji-reference prepend)))
 
+(defvar jira-blockquote-regexp
+  (rx bol "bq. " (submatch (+ not-newline))))
+
+(defvar jira-heading-regexp
+  (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
+
 (defvar jira-block-keywords
-  `((,(rx "bq. " (+ not-newline))
+  `((,jira-blockquote-regexp
      0 'jira-face-blockquote prepend)
     (,(rx bol (submatch (+ (or "*" "#" "-"))) " ")
      . font-lock-builtin-face)
+    ;; can't use `jira-heading-regexp' because font-lock can't select
+    ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
      . 'jira-face-h1)
     (,(rx bol "h2. " (*? not-newline) eol)
