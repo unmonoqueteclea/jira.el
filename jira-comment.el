@@ -52,37 +52,37 @@
     (,(rx "~" (+? not-newline) "~")
      0 'font-lock-builtin-face prepend)))
 
-(defvar jira-link-regexp
+(defvar jira-regexp-link
   (rx "[" (submatch (*? (not "]"))) "]"))
 
-(defvar jira-code-regexp
+(defvar jira-regexp-code
   (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
           (seq "{{" (submatch-n 1 (*? (not "}"))) "}}"))))
 
-(defvar jira-mention-regexp
+(defvar jira-regexp-mention
   (rx "[~" (submatch (*? (not "]"))) "]"))
 
-(defvar jira-emoji-regexp
+(defvar jira-regexp-emoji
   (rx ":" (submatch (+ (or lower digit "-"))) ":"))
 
 (defvar jira-inline-block-keywords
-  `((,jira-mention-regexp . 'jira-face-mention)
-    (,jira-link-regexp . 'jira-face-link)
-    (,jira-code-regexp . 'jira-face-code)
-    (,jira-emoji-regexp 0 'jira-face-emoji-reference prepend)))
+  `((,jira-regexp-mention . 'jira-face-mention)
+    (,jira-regexp-link . 'jira-face-link)
+    (,jira-regexp-code . 'jira-face-code)
+    (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
 
-(defvar jira-blockquote-regexp
+(defvar jira-regexp-blockquote
   (rx bol "bq. " (submatch (+ not-newline))))
 
-(defvar jira-heading-regexp
+(defvar jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
 
 (defvar jira-block-keywords
-  `((,jira-blockquote-regexp
+  `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,(rx bol (submatch (+ (or "*" "#" "-"))) " ")
      . font-lock-builtin-face)
-    ;; can't use `jira-heading-regexp' because font-lock can't select
+    ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
      . 'jira-face-h1)

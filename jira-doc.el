@@ -373,19 +373,19 @@ NAME should be a username defined in `jira-users'."
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
-                                 jira-mention-regexp
+                                 jira-regexp-mention
                                  #'jira-doc--build-mention)))
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
     (setq blocks (jira-doc--split blocks
-                                  jira-link-regexp
+                                  jira-regexp-link
                                   #'jira-doc--build-link))
     (setq blocks (jira-doc--split blocks
-                                  jira-code-regexp
+                                  jira-regexp-code
                                   #'jira-doc--build-code))
     (setq blocks (jira-doc--split blocks
-                                  jira-emoji-regexp
+                                  jira-regexp-emoji
                                   #'jira-doc--build-emoji))
     (mapcan (lambda (s)
               (if (stringp s)
@@ -396,10 +396,10 @@ NAME should be a username defined in `jira-users'."
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
-                                 jira-blockquote-regexp
+                                 jira-regexp-blockquote
                                  #'jira-doc--build-blockquote)))
     (setq blocks (jira-doc--split blocks
-                                  jira-heading-regexp
+                                  jira-regexp-heading
                                   #'jira-doc--build-heading))
     (mapcan (lambda (s)
               (if (stringp s)
