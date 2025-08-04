@@ -31,19 +31,10 @@
   (require 'rx))
 
 (require 'jira-users)
+(require 'jira-fmt)
 
 (defvar-local jira-comment--callback nil
   "The callback function to call after adding a comment.")
-
-(defface jira-face-deleted
-  '((t (:strike-through t)))
-  "Face for Jira deleted markup."
-  :group 'jira)
-
-(defface jira-face-inserted
-  '((t (:underline t)))
-  "Face for Jira inserted markup."
-  :group 'jira)
 
 (defvar jira-mark-keywords
   `((,(rx bow "*" (+? not-newline) "*" eow)
