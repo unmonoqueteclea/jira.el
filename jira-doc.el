@@ -370,6 +370,9 @@ NAME should be a username defined in `jira-users'."
       ("content" .
        ,(jira-doc-build-inline-blocks content)))))
 
+(defun jira-doc--build-rule ()
+  `(("type" . "rule")))
+
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
@@ -401,6 +404,9 @@ NAME should be a username defined in `jira-users'."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-heading
                                   #'jira-doc--build-heading))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-hr
+                                  #'jira-doc--build-rule))
     (mapcan (lambda (s)
               (if (stringp s)
                   (jira-doc-build-inline-blocks s)

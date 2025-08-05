@@ -77,6 +77,9 @@
 (defvar jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
 
+(defvar jira-regexp-hr
+  (rx bol "----"))
+
 (defvar jira-block-keywords
   `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
