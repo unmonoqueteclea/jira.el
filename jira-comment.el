@@ -80,10 +80,17 @@
 (defvar jira-regexp-hr
   (rx bol "----"))
 
+(defvar jira-regexp-list-item
+  (rx bol
+      (submatch (+ (or "*" "#" "-")))
+      (+ space)
+      (submatch (+? not-newline))
+      eol))
+
 (defvar jira-block-keywords
   `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
-    (,(rx bol (submatch (+ (or "*" "#" "-"))) " ")
+    (,jira-regexp-list-item
      . font-lock-builtin-face)
     ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.

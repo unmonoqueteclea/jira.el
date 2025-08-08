@@ -259,12 +259,23 @@ Return un-marked text and a list of applicable marks."
           (setq done t))))
     (cl-values text marks)))
 
+(defun jira-doc--submatches (s)
+  "Return all submatches of most recent match against S."
+  (let ((submatches '())
+        (d (cddr (match-data))))
+    (while (consp d)
+      (let ((start (car d))
+            (end (cadr d)))
+        (push (substring s start end) submatches)
+        (setq d (cddr d))))
+    (reverse submatches)))
+
 (defun jira-doc--split (nodes regexp f)
   "Split NODES into substrings by matching REGEXP.
 
-REGEXP should have one submatch. Substrings matching REGEXP are
-transformed by calling F with the submatch contents. Substrings which do
-not match are returned as-is."
+REGEXP should have at least one submatch. Substrings matching REGEXP are
+transformed by calling F with the submatches as arguments. Substrings
+which do not match are returned as-is."
   (mapcan (lambda (s)
             (if (stringp s)
                 (let ((i 0)
@@ -274,8 +285,8 @@ not match are returned as-is."
                     (unless (= i (match-beginning 0))
                       (push (substring s i (match-beginning 0))
                             subs))
-                    (push (funcall f (match-string 1 s))
-                          subs)
+                    (push (apply f (jira-doc--submatches s))
+                           subs)
                     (setq i (match-end 0)))
                   (unless (= i (length s))
                     (push (substring s i) subs))
@@ -373,6 +384,19 @@ NAME should be a username defined in `jira-users'."
 (defun jira-doc--build-rule ()
   `(("type" . "rule")))
 
+(defun jira-doc--build-list-item (&rest children)
+  "Make an ADF listItem node."
+  `(("type" . "listItem")
+    ("content" . ,children)))
+
+(defun jira-doc--build-list (items ordered-p)
+  "Make an ADF bulletList or orderedList node."
+  `(("type" . ,(if ordered-p
+                   "orderedList"
+                 "bulletList"))
+    ("content" . ,items)))
+
+
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
@@ -396,6 +420,91 @@ NAME should be a username defined in `jira-users'."
                 (list s)))
             blocks)))
 
+(defun jira-doc--build-lists (block)
+  ;; mark list items: depth, ordered?, text
+  (let* ((b* (jira-doc--split (list block)
+                              jira-regexp-list-item
+                              #'(lambda (prefix text)
+                                  `(list-item ,(length prefix)
+                                              ,(eq (aref prefix (1- (length prefix)))
+                                                   ?#)
+                                              ,text))))
+         ;; collect list items into a tree of lists.
+         (ret '())
+         (stack '())
+         (cur '())
+         (ordered-p nil)
+         (finish-list #'(lambda ()
+                          "Create the list node for CUR and put it where it belongs."
+                          (when cur
+                            (let ((l (jira-doc--build-list (reverse cur)
+                                                           ordered-p)))
+                              (if (null stack)
+                                  (push l ret)
+                                ;; add L to the last list-item in the previous list
+                                (pcase-let ((`(,_ordered-p ,parent-list) (car stack)))
+                                  (let ((parent (car parent-list)))
+                                    (setf (alist-get "content" parent nil nil #'equal)
+                                          (append (alist-get "content" parent nil nil #'equal)
+                                                  (list l))))))))))
+         (pop-lists #'(lambda (n)
+                        "Finish N lists on STACK."
+                        (dotimes (_ n)
+                          (funcall finish-list)
+                          (pcase-setq `(,ordered-p ,cur) (pop stack))))))
+    (dolist (b b*)
+      (pcase b
+        (`(list-item ,d ,li-ordered-p ,text)
+         (let ((li (jira-doc--build-list-item
+                    `(("type" . "paragraph")
+                      ;; The documentation for listItem says it doesn't support marks,
+                      ;; but empirically it does, so let's interpret them.
+                      ("content" . ,(jira-doc--build-marked-text text)))))
+               (depth (+ (length stack)
+                         (if cur 1 0))))
+           (cond ((> depth d)
+                  ;; the nested lists from DEPTH to D, including
+                  ;; CUR, are finished.
+                  (funcall pop-lists (- depth d)))
+                 ((> d depth)
+                  ;; starting a new list... but if D > (DEPTH+1) we
+                  ;; need to make up intermediate lists with blank
+                  ;; list-items.
+                  (when cur
+                    (push `(,ordered-p ,cur) stack)
+                    (setq cur nil))
+                  (dotimes (_ (- d depth 1))
+                    ;; made-up intermediate lists are ordered if the
+                    ;; first "real" item is ordered. (The parargraph
+                    ;; with no content is what API v3 accepts;
+                    ;; anything else fails with INVALID_INPUT.)
+                    (push `(,li-ordered-p (,(jira-doc--build-list-item
+                                             '((type . "paragraph")))))
+                          stack))))
+           (if (eq ordered-p li-ordered-p)
+               (push li cur)
+             (funcall finish-list)
+             (setq cur (list li)
+                   ordered-p li-ordered-p))))
+        ("\n"
+         ;; EOL after a list item: ignore
+         )
+        (_
+         ;; not a list item: all pending lists are now complete.
+         (funcall pop-lists (length stack))
+         (funcall finish-list)
+         (setq cur nil)
+         (push b ret))))
+
+    ;; end of BLOCK: all pending lists are now complete.
+    (funcall pop-lists (length stack))
+    (funcall finish-list)
+    (reverse ret)))
+
+(defun jira-doc-build-lists (blocks)
+  "Collect list items out of BLOCKS and create bulletList and orderedList nodes."
+  (mapcan #'jira-doc--build-lists blocks))
+
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
   (let ((blocks (jira-doc--split (list text)
@@ -407,6 +516,7 @@ NAME should be a username defined in `jira-users'."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-hr
                                   #'jira-doc--build-rule))
+    (setq blocks (jira-doc-build-lists blocks))
     (mapcan (lambda (s)
               (if (stringp s)
                   (jira-doc-build-inline-blocks s)
