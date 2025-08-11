@@ -75,14 +75,6 @@
 	(cons "Cost Center" (cons :custom "Cost center")))
   "List of fields that can be updated in the Jira detail view.")
 
-(defconst jira-comment-instruction-line
-  ";; Write your comment below - Press C-c C-c to send or C-c C-k to cancel."
-  "The instruction line shown in Jira comment buffers.")
-
-(defconst jira-description-instruction-line
-  ";; Write the description below - Press C-c C-c to save or C-c C-k to cancel."
-  "The instruction line shown in Jira description editor buffers.")
-
 (defcustom jira-comments-display-recent-first
   t
   "The order to display Jira comments."
@@ -240,7 +232,7 @@
   "Add a comment to the issue with KEY."
   (jira-comment-create-editor-buffer
    (format "*Jira Comment: %s*" key)
-   "" jira-comment-instruction-line
+   ""
    (lambda (content)
      (jira-actions-add-comment
       key content
@@ -252,7 +244,6 @@
     (jira-comment-create-editor-buffer
      (concat "*Jira Description [" key "]*")
      ""
-     jira-description-instruction-line
      (lambda (new-description)
        (jira-detail--update-field-action
 	"description" (jira-doc-build new-description) key)))))

@@ -100,10 +100,40 @@
     (,(rx bol "h6. " (*? not-newline) eol)
      . 'jira-face-h6)))
 
+(defvar jira-regexp-comment-instruction
+  (rx bol (+ ";") (+? not-newline) eol))
+
 (defvar jira-font-lock-keywords
-  (append jira-block-keywords
+  (append `((,jira-regexp-comment-instruction
+             0 font-lock-comment-face prepend))
+          jira-block-keywords
           jira-inline-block-keywords
           jira-mark-keywords))
+
+(defvar jira-comment-instructions
+  ";; Write your message above. Lines beginning with ;; will be ignored.
+
+;; C-c C-c: send
+;; C-c C-k: cancel
+;; C-c m: insert user mention
+
+;; Markup:
+;; *strong*
+;; _emphasis_
+;; -deleted-
+;; +inserted+
+;; ^superscript^
+;; ~subscript~
+;; `code`
+
+;; [title|link]
+;; :emoji:
+
+;; bq. blockquote
+;; h1-6. header
+;; ---- horizontal rule
+"
+  "Instructions included in jira-comment-mode buffers.")
 
 (defun jira-comment-insert-mention ()
   "Insert a mention at point, prompting for a username."
@@ -135,20 +165,25 @@
   (set-buffer-modified-p nil))
 
 (defun jira-comment-create-editor-buffer
-    (buffer-name initial-content instructions save-callback)
+    (buffer-name initial-content save-callback)
   "Create and display an editor buffer with INITIAL-CONTENT and a SAVE-CALLBACK."
   (let ((buf (get-buffer-create buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
-      (insert instructions "\n\n")
       (insert initial-content)
+      (insert "\n\n" jira-comment-instructions)
+      (goto-char (point-min))
       (jira-comment-mode)
       (setq jira-comment--callback
             (lambda ()
-              (let ((content (buffer-string)))
+              (let ((content
+                     (progn
+                       (goto-char (point-min))
+                       (while (re-search-forward jira-regexp-comment-instruction nil t)
+                         (replace-match ""))
+                       (string-trim (buffer-string)))))
                 (kill-buffer buf)
-                (funcall save-callback
-		         (string-trim (string-remove-prefix instructions content))))))
+                (funcall save-callback content))))
       (display-buffer buf)
       (select-window (get-buffer-window buf)))))
 
