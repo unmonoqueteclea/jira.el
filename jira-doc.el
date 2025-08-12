@@ -507,7 +507,7 @@ NAME should be a username defined in `jira-users'."
 
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
-  (let ((blocks (jira-doc--split (list text)
+  (let ((blocks (jira-doc--split text
                                  jira-regexp-blockquote
                                  #'jira-doc--build-blockquote)))
     (setq blocks (jira-doc--split blocks
@@ -517,10 +517,11 @@ NAME should be a username defined in `jira-users'."
                                   jira-regexp-hr
                                   #'jira-doc--build-rule))
     (setq blocks (jira-doc-build-lists blocks))
-    (mapcan (lambda (s)
+    (mapcar (lambda (s)
               (if (stringp s)
-                  (jira-doc-build-inline-blocks s)
-                (list s)))
+                  `(("type" . "paragraph")
+                    ("content" ,@(jira-doc-build-inline-blocks s)))
+                s))
             blocks)))
 
 (defun jira-doc-build (text)
@@ -528,10 +529,7 @@ NAME should be a username defined in `jira-users'."
   (let* ((lines (split-string (or text "") "\n" t)))
     `(("type" . "doc") ("version" . 1)
       ("content" .
-       ,(mapcar (lambda (line)
-                  `(("type" . "paragraph")
-                    ("content" ,@(jira-doc-build-toplevel-blocks line))))
-                lines)))))
+       ,(jira-doc-build-toplevel-blocks lines)))))
 
 (provide 'jira-doc)
 
