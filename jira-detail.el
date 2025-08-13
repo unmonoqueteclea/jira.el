@@ -39,7 +39,7 @@
 (require 'jira-table)
 (require 'jira-utils)
 (require 'jira-complete)
-(require 'jira-comment)
+(require 'jira-edit)
 
 
 (defvar-local jira-detail--current nil
@@ -230,7 +230,7 @@
 
 (defun jira-detail--add-comment (key)
   "Add a comment to the issue with KEY."
-  (jira-comment-create-editor-buffer
+  (jira-edit-create-editor-buffer
    (format "*Jira Comment: %s*" key)
    ""
    (lambda (content)
@@ -241,7 +241,7 @@
 (defun jira-detail--edit-description-and-update ()
   "Open a buffer to edit the description and update the issue."
   (let ((key jira-detail--current-key))
-    (jira-comment-create-editor-buffer
+    (jira-edit-create-editor-buffer
      (concat "*Jira Description [" key "]*")
      ""
      (lambda (new-description)

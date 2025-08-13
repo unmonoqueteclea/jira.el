@@ -1,4 +1,4 @@
-;;; jira-comment.el --- Writing comments  -*- lexical-binding: t; -*-
+;;; jira-edit.el --- Editing text with Jira markup  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Dan McCarthy, Pablo González Carrizo
 
@@ -33,7 +33,7 @@
 (require 'jira-users)
 (require 'jira-fmt)
 
-(defvar-local jira-comment--callback nil
+(defvar-local jira-edit--callback nil
   "The callback function to call after adding a comment.")
 
 (defvar jira-mark-keywords
@@ -117,7 +117,7 @@
           jira-inline-block-keywords
           jira-mark-keywords))
 
-(defvar jira-comment-instructions
+(defvar jira-edit-instructions
   ";; Write your message above. Lines beginning with ;; will be ignored.
 
 ;; C-c C-c: send
@@ -140,26 +140,26 @@
 ;; h1-6. header
 ;; ---- horizontal rule
 "
-  "Instructions included in jira-comment-mode buffers.")
+  "Instructions included in jira-edit-mode buffers.")
 
-(defun jira-comment-insert-mention ()
+(defun jira-edit-insert-mention ()
   "Insert a mention at point, prompting for a username."
   (interactive)
   (pcase (jira-users-read-user "Mention user: ")
     (`(,name ,_id)
      (insert (concat "[~" name "]")))))
 
-(defvar-keymap jira-comment-mode-map
+(defvar-keymap jira-edit-mode-map
   "C-c C-c" #'(lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
-                (funcall jira-comment--callback))
+                (funcall jira-edit--callback))
   "C-c C-k" 'kill-buffer
-  "C-c m"   'jira-comment-insert-mention)
+  "C-c m"   'jira-edit-insert-mention)
 
-(define-derived-mode jira-comment-mode text-mode
-  "Jira Comment"
-  "Major mode for writing Jira comments."
+(define-derived-mode jira-edit-mode text-mode
+  "Jira Edit"
+  "Major mode for writing Jira comments, descriptions etc."
   (setq font-lock-defaults '(jira-font-lock-keywords))
   (set-syntax-table (let ((st (make-syntax-table)))
                       (modify-syntax-entry ?+ "w" st)
@@ -171,17 +171,17 @@
                       st))
   (set-buffer-modified-p nil))
 
-(defun jira-comment-create-editor-buffer
+(defun jira-edit-create-editor-buffer
     (buffer-name initial-content save-callback)
   "Create and display an editor buffer with INITIAL-CONTENT and a SAVE-CALLBACK."
   (let ((buf (get-buffer-create buffer-name)))
     (with-current-buffer buf
       (erase-buffer)
       (insert initial-content)
-      (insert "\n\n" jira-comment-instructions)
+      (insert "\n\n" jira-edit-instructions)
       (goto-char (point-min))
-      (jira-comment-mode)
-      (setq jira-comment--callback
+      (jira-edit-mode)
+      (setq jira-edit--callback
             (lambda ()
               (let ((content
                      (progn
@@ -194,6 +194,6 @@
       (display-buffer buf)
       (select-window (get-buffer-window buf)))))
 
-(provide 'jira-comment)
+(provide 'jira-edit)
 
-;;; jira-comment.el ends here
+;;; jira-edit.el ends here
