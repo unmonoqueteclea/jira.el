@@ -139,6 +139,18 @@
 ;; bq. blockquote
 ;; h1-6. header
 ;; ---- horizontal rule
+
+;; Bullet lists:
+;; * a
+;; ** b
+;; *** c
+
+;; Ordered lists:
+;; # 1
+;; # 2
+;; ## 2a
+;; ## 2b
+;; ### 2b1
 "
   "Instructions included in jira-edit-mode buffers.")
 
