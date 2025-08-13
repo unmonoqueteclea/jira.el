@@ -526,10 +526,13 @@ NAME should be a username defined in `jira-users'."
 
 (defun jira-doc-build (text)
   "Build a simple Jira document (ADF) from TEXT."
-  (let* ((lines (split-string (or text "") "\n" t)))
+  (let* ((paras (mapcar #'string-trim
+                        (split-string (or text "")
+                                      "\n\\([ 	]*\n\\)+"
+                                      t))))
     `(("type" . "doc") ("version" . 1)
       ("content" .
-       ,(jira-doc-build-toplevel-blocks lines)))))
+       ,(jira-doc-build-toplevel-blocks paras)))))
 
 (provide 'jira-doc)
 
