@@ -52,17 +52,17 @@
     (,(rx "~" (+? not-newline) "~")
      0 'font-lock-builtin-face prepend)))
 
-(defvar jira-regexp-link
+(defconst jira-regexp-link
   (rx "[" (submatch (*? (not "]"))) "]"))
 
-(defvar jira-regexp-code
+(defconst jira-regexp-code
   (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
           (seq "{{" (submatch-n 1 (*? (not "}"))) "}}"))))
 
-(defvar jira-regexp-mention
+(defconst jira-regexp-mention
   (rx "[~" (submatch (*? (not "]"))) "]"))
 
-(defvar jira-regexp-emoji
+(defconst jira-regexp-emoji
   (rx ":" (submatch (+ (or lower digit "-"))) ":"))
 
 (defvar jira-inline-block-keywords
@@ -71,16 +71,16 @@
     (,jira-regexp-code . 'jira-face-code)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
 
-(defvar jira-regexp-blockquote
+(defconst jira-regexp-blockquote
   (rx bol "bq. " (submatch (+ not-newline))))
 
-(defvar jira-regexp-heading
+(defconst jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
 
-(defvar jira-regexp-hr
+(defconst jira-regexp-hr
   (rx bol "----"))
 
-(defvar jira-regexp-list-item
+(defconst jira-regexp-list-item
   (rx bol
       (submatch (+ (or "*" "#" "-")))
       (+ space)
@@ -107,7 +107,7 @@
     (,(rx bol "h6. " (*? not-newline) eol)
      . 'jira-face-h6)))
 
-(defvar jira-regexp-comment-instruction
+(defconst jira-regexp-comment-instruction
   (rx bol (+ ";") (+? not-newline) eol))
 
 (defvar jira-font-lock-keywords
