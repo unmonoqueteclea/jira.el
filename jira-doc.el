@@ -524,8 +524,8 @@ NAME should be a username defined in `jira-users'."
                 s))
             blocks)))
 
-(defun jira-doc-build (text)
-  "Build a simple Jira document (ADF) from TEXT."
+(defun jira-doc-build-adf (text)
+  "Build a Jira document (ADF) from TEXT."
   (let* ((paras (mapcar #'string-trim
                         (split-string (or text "")
                                       "\n\\([ 	]*\n\\)+"
@@ -533,6 +533,36 @@ NAME should be a username defined in `jira-users'."
     `(("type" . "doc") ("version" . 1)
       ("content" .
        ,(jira-doc-build-toplevel-blocks paras)))))
+
+
+;;; Building v2 texts.
+
+(defun jira-doc-build-v2 (text)
+  "Format TEXT for Jira API v2."
+  ;; Rewrite `...` into {{...}}.
+  (let ((blocks (jira-doc--split (list text)
+                                 jira-regexp-code
+                                 (lambda (x)
+                                   (concat "{{" x "}}")))))
+    ;; Rewrite mentions into "[~accountid:123456790]". This form is
+    ;; not documented but it's how mentions are rendered in text
+    ;; returned by the v2 API.
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-mention
+                                  (lambda (username)
+                                    (let ((account-id (gethash username jira-users)))
+                                      (concat "[~accountid:" account-id "]")))))
+    (string-join blocks)))
+
+
+;;; Entry point.
+
+(defun jira-doc-build (text)
+  "Build a Jira document from TEXT."
+  (if (= jira-api-version 3)
+      (jira-doc-build-adf text)
+    (jira-doc-build-v2 text)))
+
 
 (provide 'jira-doc)
 
