@@ -110,9 +110,26 @@
 (defconst jira-regexp-comment-instruction
   (rx bol (+ ";") (+? not-newline) eol))
 
+(defconst jira-regexp-code-block
+  (rx bol "{code}" (submatch (* anychar)) "{code}" (*? whitespace) eol))
+
+;; Implementation taken from https://stackoverflow.com/questions/9452615/emacs-is-there-a-clear-example-of-multi-line-font-locking
+(defun jira-edit-font-lock-extend-region ()
+  "Extend the search region to include an entire paragraph."
+  (eval-when-compile (defvar font-lock-beg) (defvar font-lock-end))
+  (save-excursion
+    (goto-char font-lock-beg)
+    (let ((found (or (re-search-backward "\n\n" nil t)
+                     (point-min))))
+      (goto-char font-lock-end)
+      (when (re-search-forward "\n\n" nil t)
+        (setq font-lock-end (line-beginning-position)))
+      (setq font-lock-beg found))))
+
 (defvar jira-font-lock-keywords
   (append `((,jira-regexp-comment-instruction
              0 font-lock-comment-face prepend))
+          `((,jira-regexp-code-block . 'jira-face-code))
           jira-block-keywords
           jira-inline-block-keywords
           jira-mark-keywords))
@@ -151,6 +168,13 @@
 ;; ## 2a
 ;; ## 2b
 ;; ### 2b1
+
+;; Code blocks:
+;; {code}
+;; if (someFunction()) {
+;;   x = 42;
+;; }
+;; {code}
 "
   "Instructions included in jira-edit-mode buffers.")
 
@@ -173,6 +197,9 @@
   "Jira Edit"
   "Major mode for writing Jira comments, descriptions etc."
   (setq font-lock-defaults '(jira-font-lock-keywords))
+  (setq-local font-lock-multiline t)
+  (add-hook 'font-lock-extend-region-functions
+            'jira-edit-font-lock-extend-region)
   (set-syntax-table (let ((st (make-syntax-table)))
                       (modify-syntax-entry ?+ "w" st)
                       (modify-syntax-entry ?* "w" st)

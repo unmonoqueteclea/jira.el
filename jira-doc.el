@@ -285,8 +285,9 @@ which do not match are returned as-is."
                     (unless (= i (match-beginning 0))
                       (push (substring s i (match-beginning 0))
                             subs))
-                    (push (apply f (jira-doc--submatches s))
-                           subs)
+                    (save-match-data
+                      (push (apply f (jira-doc--submatches s))
+                            subs))
                     (setq i (match-end 0)))
                   (unless (= i (length s))
                     (push (substring s i) subs))
@@ -363,6 +364,12 @@ NAME should be a username defined in `jira-users'."
   `(("type" . "emoji")
     ("attrs" .
      (("shortName" . ,name)))))
+
+(defun jira-doc--build-code-block (body)
+  "Make an ADF codeBlock node."
+  `(("type" . "codeBlock")
+    ("content" .
+     (,(jira-doc--build-text (string-trim body))))))
 
 (defun jira-doc--build-blockquote (quoted-text)
   `(("type" . "blockquote")
@@ -508,8 +515,11 @@ NAME should be a username defined in `jira-users'."
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
   (let ((blocks (jira-doc--split text
-                                 jira-regexp-blockquote
-                                 #'jira-doc--build-blockquote)))
+                                 jira-regexp-code-block
+                                 #'jira-doc--build-code-block)))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-blockquote
+                                  #'jira-doc--build-blockquote))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-heading
                                   #'jira-doc--build-heading))
