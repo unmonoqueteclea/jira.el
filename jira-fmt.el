@@ -128,6 +128,16 @@ For example:
   '((t (:family "Monospace")))
   "Face used to show code blocks." :group 'jira)
 
+(defface jira-face-deleted
+  '((t (:strike-through t)))
+  "Face for Jira deleted markup."
+  :group 'jira)
+
+(defface jira-face-inserted
+  '((t (:underline t)))
+  "Face for Jira inserted markup."
+  :group 'jira)
+
 (defun jira-fmt--alist-p (value)
   (and value (listp value) (or (null value) (consp (car value)))))
 
