@@ -67,8 +67,8 @@
 
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
-    (,jira-regexp-link . 'jira-face-link)
     (,jira-regexp-code . 'jira-face-code)
+    (,jira-regexp-link . 'jira-face-link)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
 
 (defconst jira-regexp-blockquote

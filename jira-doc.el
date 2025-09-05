@@ -413,11 +413,11 @@ NAME should be a username defined in `jira-users'."
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
     (setq blocks (jira-doc--split blocks
-                                  jira-regexp-link
-                                  #'jira-doc--build-link))
-    (setq blocks (jira-doc--split blocks
                                   jira-regexp-code
                                   #'jira-doc--build-code))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-link
+                                  #'jira-doc--build-link))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-emoji
                                   #'jira-doc--build-emoji))
