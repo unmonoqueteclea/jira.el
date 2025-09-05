@@ -466,7 +466,7 @@ NAME should be a username defined in `jira-users'."
                     `(("type" . "paragraph")
                       ;; The documentation for listItem says it doesn't support marks,
                       ;; but empirically it does, so let's interpret them.
-                      ("content" . ,(jira-doc--build-marked-text text)))))
+                      ("content" . ,(jira-doc-build-inline-blocks text)))))
                (depth (+ (length stack)
                          (if cur 1 0))))
            (cond ((> depth d)
