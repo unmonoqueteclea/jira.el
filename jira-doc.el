@@ -297,13 +297,13 @@ which do not match are returned as-is."
 
 (defun jira-doc--build-marked-text (text)
   "Split TEXT into a list of ADF text nodes with marks."
-  (let* ((mark-regexp (concat "\\("
+  (let* ((mark-regexp (concat "\\_<\\("
                               (string-join (mapcar #'(lambda (d)
                                                        (let ((delim (regexp-quote (car d))))
                                                          (concat delim ".+?" delim)))
                                                    jira-doc--marks-delimiters)
                                            "\\|")
-                              "\\)"))
+                              "\\)\\_>"))
          (areas (jira-doc--split (list text)
                                  mark-regexp
                                  #'(lambda (s)

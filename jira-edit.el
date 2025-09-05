@@ -37,19 +37,19 @@
   "The callback function to call after adding a comment.")
 
 (defvar jira-mark-keywords
-  `((,(rx bow "*" (+? not-newline) "*" eow)
+  `((,(rx symbol-start "*" (+? not-newline) "*" symbol-end)
      0 'bold prepend)
-    (,(rx bow "_" (+? not-newline) "_" eow)
+    (,(rx symbol-start "_" (+? not-newline) "_" symbol-end)
      0 'italic prepend)
-    (,(rx bow "-" (+? (not "-")) "-")
+    (,(rx symbol-start "-" (+? not-newline) "-" symbol-end)
      0 'jira-face-deleted prepend)
-    (,(rx "+" (+? not-newline) "+")
+    (,(rx symbol-start "+" (+? not-newline) "+" symbol-end)
      0 'jira-face-inserted prepend)
     ;; can't display subscript or superscript: AFAICT font-lock
     ;; shouldn't manage the 'display text property.
-    (,(rx "^" (+? not-newline) "^")
+    (,(rx symbol-start "^" (+? not-newline) "^" symbol-end)
      0 'font-lock-builtin-face prepend)
-    (,(rx "~" (+? not-newline) "~")
+    (,(rx symbol-start "~" (+? not-newline) "~" symbol-end)
      0 'font-lock-builtin-face prepend)))
 
 (defconst jira-regexp-link
