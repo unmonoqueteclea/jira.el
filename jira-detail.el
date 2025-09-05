@@ -39,6 +39,7 @@
 (require 'jira-table)
 (require 'jira-utils)
 (require 'jira-complete)
+(require 'jira-edit)
 
 
 (defvar-local jira-detail--current nil
@@ -52,12 +53,6 @@
 
 (defvar-local jira-detail--current-watchers nil
   "Watchers of the current issue being displayed.")
-
-(defvar-local jira-comment--issue-key nil
-  "The key of the Jira issue for which a comment is being added.")
-
-(defvar-local jira-comment--callback nil
-  "The callback function to call after adding a comment.")
 
 (defconst jira-detail--updatable-fields
   (list (cons "Parent Issue" "parent")
@@ -79,14 +74,6 @@
 	(cons "Business Line" (cons :custom "Business line"))
 	(cons "Cost Center" (cons :custom "Cost center")))
   "List of fields that can be updated in the Jira detail view.")
-
-(defconst jira-comment-instruction-line
-  ";; Write your comment below - Press C-c C-c to send or C-c C-k to cancel."
-  "The instruction line shown in Jira comment buffers.")
-
-(defconst jira-description-instruction-line
-  ";; Write the description below - Press C-c C-c to save or C-c C-k to cancel."
-  "The instruction line shown in Jira description editor buffers.")
 
 (defcustom jira-comments-display-recent-first
   t
@@ -243,34 +230,11 @@
     (jira-detail--show-other key)
     (pop-to-buffer (current-buffer))))
 
-
-(defun jira-detail--create-editor-buffer
-    (buffer-name initial-content instructions save-callback)
-  "Create and display an editor buffer with INITIAL-CONTENT and a SAVE-CALLBACK."
-  (let ((buf (get-buffer-create buffer-name)))
-    (with-current-buffer buf
-      (erase-buffer)
-      (insert instructions "\n\n")
-      (insert initial-content)
-      (let ((map (make-sparse-keymap)))
-        (define-key map (kbd "C-c C-c")
-          (lambda () (interactive)
-            (let ((content (buffer-string)))
-              (kill-buffer buf)
-              (funcall save-callback
-		       (string-trim (string-remove-prefix instructions content))))))
-        (define-key map (kbd "C-c C-k")
-          (lambda () (interactive) (kill-buffer buf)))
-        (set-buffer-modified-p nil)
-        (use-local-map map))
-      (display-buffer buf)
-      (select-window (get-buffer-window buf)))))
-
 (defun jira-detail--add-comment (key)
   "Add a comment to the issue with KEY."
-  (jira-detail--create-editor-buffer
+  (jira-edit-create-editor-buffer
    (format "*Jira Comment: %s*" key)
-   "" jira-comment-instruction-line
+   ""
    (lambda (content)
      (jira-actions-add-comment
       key content
@@ -279,10 +243,9 @@
 (defun jira-detail--edit-description-and-update ()
   "Open a buffer to edit the description and update the issue."
   (let ((key jira-detail--current-key))
-    (jira-detail--create-editor-buffer
+    (jira-edit-create-editor-buffer
      (concat "*Jira Description [" key "]*")
      ""
-     jira-description-instruction-line
      (lambda (new-description)
        (jira-detail--update-field-action
 	"description" (jira-doc-build new-description) key)))))
