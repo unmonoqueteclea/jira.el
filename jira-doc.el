@@ -368,15 +368,15 @@ NAME should be a username defined in `jira-users'."
 (defun jira-doc--build-code-block (body)
   "Make an ADF codeBlock node."
   `(("type" . "codeBlock")
-    ("content" .
-     (,(jira-doc--build-text (string-trim body))))))
+    ("content"
+     ,(jira-doc--build-text (string-trim body)))))
 
 (defun jira-doc--build-blockquote (quoted-text)
   `(("type" . "blockquote")
-    ("content" .
+    ("content"
      (("type" . "paragraph")
-      ("content" .
-       ,(jira-doc-build-inline-blocks quoted-text))))))
+      ("content"
+       ,@(jira-doc-build-inline-blocks quoted-text))))))
 
 (defun jira-doc--build-heading (heading-text)
   "Make an ADF heading node."
@@ -385,8 +385,8 @@ NAME should be a username defined in `jira-users'."
     `(("type" . "heading")
       ("attrs" .
        (("level" . ,(- level ?0))))
-      ("content" .
-       ,(jira-doc-build-inline-blocks content)))))
+      ("content"
+       ,@(jira-doc-build-inline-blocks content)))))
 
 (defun jira-doc--build-rule ()
   `(("type" . "rule")))
