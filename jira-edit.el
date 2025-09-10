@@ -111,7 +111,7 @@
   (rx bol (+ ";") (+? not-newline) eol))
 
 (defconst jira-regexp-code-block
-  (rx bol "{code}" (submatch (* anychar)) "{code}" (*? whitespace) eol))
+  (rx bol "{code}" (submatch (*? anychar)) "{code}" (*? whitespace) eol))
 
 ;; Implementation taken from https://stackoverflow.com/questions/9452615/emacs-is-there-a-clear-example-of-multi-line-font-locking
 (defun jira-edit-font-lock-extend-region ()
