@@ -32,6 +32,7 @@
 
 (require 'cl-lib)
 (require 'jira-fmt)
+(require 'jira-api)
 
 ;; these blocks contain the content property
 (defconst jira-doc--top-level-blocks
@@ -47,6 +48,22 @@
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
     "text" "mediaInline"))
+
+(defconst jira-doc--marks-delimiters
+  ;; link and code are not included here because their structure is
+  ;; not like other marks. See comment in
+  ;; `jira-doc-build-inline-blocks'.
+  `(("_" em)
+    ("-" strike)
+    ("*" strong)
+    ("+" underline)
+    ("^" (("type" . "subsup")
+          ("attrs" .
+           ("type" . "sup"))))
+    ("~" (("type" . "subsup")
+          ("attrs" .
+           ("type" . "sub")))))
+  "List matching the start of a group of text marks.")
 
 (defun jira-doc--list-to-str (items sep)
   "Concatenate ITEMS with SEP."
@@ -216,15 +233,346 @@
        (mapcar (lambda (block) (jira-doc--format-block block)) content)
        "\n"))))
 
-(defun jira-doc-build (text)
-  "Build a simple Jira document (ADF) from TEXT."
-  (let* ((lines (split-string (or text "") "\n" t)))
+
+;; Building ADF from Jira-style markdown.
+
+(defun jira-doc--collect-marks (text)
+  "Remove Jira marks from TEXT.
+
+Return un-marked text and a list of applicable marks."
+  (let ((marks '())
+        done)
+    (while (not done)
+      (let (any-matched)
+        (dolist (m jira-doc--marks-delimiters)
+          (pcase m
+            (`(,delim ,type)
+             (when (and (string-prefix-p delim text)
+                        (string-suffix-p delim text))
+               (setq text (substring text
+                                     (length delim)
+                                     (- (length text)
+                                        (length delim)))
+                     marks (cons type marks)
+                     any-matched t)))))
+        (unless any-matched
+          (setq done t))))
+    (cl-values text marks)))
+
+(defun jira-doc--submatches (s)
+  "Return all submatches of most recent match against S."
+  (let ((submatches '())
+        (d (cddr (match-data))))
+    (while (consp d)
+      (let ((start (car d))
+            (end (cadr d)))
+        (push (substring s start end) submatches)
+        (setq d (cddr d))))
+    (reverse submatches)))
+
+(defun jira-doc--split (nodes regexp f)
+  "Split NODES into substrings by matching REGEXP.
+
+REGEXP should have at least one submatch. Substrings matching REGEXP are
+transformed by calling F with the submatches as arguments. Substrings
+which do not match are returned as-is."
+  (mapcan (lambda (s)
+            (if (stringp s)
+                (let ((i 0)
+                      (subs '()))
+                  (while (and (< i (length s))
+                              (string-match regexp s i))
+                    (unless (= i (match-beginning 0))
+                      (push (substring s i (match-beginning 0))
+                            subs))
+                    (save-match-data
+                      (push (apply f (jira-doc--submatches s))
+                            subs))
+                    (setq i (match-end 0)))
+                  (unless (= i (length s))
+                    (push (substring s i) subs))
+                  (nreverse subs))
+              (list s)))
+          nodes))
+
+(defun jira-doc--build-marked-text (text)
+  "Split TEXT into a list of ADF text nodes with marks."
+  (let* ((mark-regexp (concat "\\_<\\("
+                              (string-join (mapcar #'(lambda (d)
+                                                       (let ((delim (regexp-quote (car d))))
+                                                         (concat delim ".+?" delim)))
+                                                   jira-doc--marks-delimiters)
+                                           "\\|")
+                              "\\)\\_>"))
+         (areas (jira-doc--split (list text)
+                                 mark-regexp
+                                 #'(lambda (s)
+                                     (pcase (jira-doc--collect-marks s)
+                                       (`(,body ,marks)
+                                        (jira-doc--build-text body marks)))))))
+    (mapcar #'(lambda (s)
+                (if (stringp s)
+                    (jira-doc--build-text s)
+                  s))
+            areas)))
+
+(defun jira-doc--build-text (body &optional marks)
+  "Make an ADF text node with BODY as contents.
+
+If given, MARKS should be a list of names of marks or ADF mark nodes."
+  `(("type" . "text")
+    ("text" . ,body)
+    ,@(when marks
+        `(("marks" . ,(apply #'vector
+                             (mapcar (lambda (mark)
+                                       (if (consp mark)
+                                           mark
+                                         `(("type" . ,mark))))
+                                     marks)))))))
+
+(defun jira-doc--build-mention (name)
+  "Make an ADF mention node.
+
+NAME should be a username defined in `jira-users'."
+  (let ((account-id (gethash name jira-users)))
+    `(("type" . "mention")
+      ("attrs" .
+       (("id" . ,account-id))))))
+
+(defun jira-doc--build-link (contents)
+  "Make an ADF link node."
+  (let* ((has-title (string-search "|" contents))
+         (title (if has-title
+                    (substring contents 0 has-title)
+                  contents))
+         (url (if has-title
+                  (substring contents (1+ has-title))
+                contents)))
+    (jira-doc--build-text title
+                          `((("type" . "link")
+                             ("attrs" .
+                              (("href" . ,url)
+                               ("title" . ,title))))))))
+
+(defun jira-doc--build-code (contents)
+  "Make an ADF text node marked as code."
+  (jira-doc--build-text contents
+                        `((("type" . "code")))))
+
+(defun jira-doc--build-emoji (name)
+  "Make an ADF emoji node."
+  `(("type" . "emoji")
+    ("attrs" .
+     (("shortName" . ,name)))))
+
+(defun jira-doc--build-code-block (body)
+  "Make an ADF codeBlock node."
+  `(("type" . "codeBlock")
+    ("content"
+     ,(jira-doc--build-text (string-trim body)))))
+
+(defun jira-doc--build-blockquote (quoted-text)
+  `(("type" . "blockquote")
+    ("content"
+     (("type" . "paragraph")
+      ("content"
+       ,@(jira-doc-build-inline-blocks quoted-text))))))
+
+(defun jira-doc--build-heading (heading-text)
+  "Make an ADF heading node."
+  (let ((level (aref heading-text 0))
+        (content (substring heading-text 3))) ; skip "[1-6]. "
+    `(("type" . "heading")
+      ("attrs" .
+       (("level" . ,(- level ?0))))
+      ("content"
+       ,@(jira-doc-build-inline-blocks content)))))
+
+(defun jira-doc--build-rule ()
+  `(("type" . "rule")))
+
+(defun jira-doc--build-list-item (&rest children)
+  "Make an ADF listItem node."
+  `(("type" . "listItem")
+    ("content" . ,children)))
+
+(defun jira-doc--build-list (items ordered-p)
+  "Make an ADF bulletList or orderedList node."
+  `(("type" . ,(if ordered-p
+                   "orderedList"
+                 "bulletList"))
+    ("content" . ,items)))
+
+
+(defun jira-doc-build-inline-blocks (text)
+  "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
+  (let ((blocks (jira-doc--split (list text)
+                                 jira-regexp-mention
+                                 #'jira-doc--build-mention)))
+    ;; links and code are actually kinds of marks, but their ADF
+    ;; structure is not like other marks, so it's easier to pretend
+    ;; they're blocks.
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-code
+                                  #'jira-doc--build-code))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-link
+                                  #'jira-doc--build-link))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-emoji
+                                  #'jira-doc--build-emoji))
+    (mapcan (lambda (s)
+              (if (stringp s)
+                  (jira-doc--build-marked-text s)
+                (list s)))
+            blocks)))
+
+(defun jira-doc--build-lists (block)
+  ;; mark list items: depth, ordered?, text
+  (let* ((b* (jira-doc--split (list block)
+                              jira-regexp-list-item
+                              #'(lambda (prefix text)
+                                  `(list-item ,(length prefix)
+                                              ,(eq (aref prefix (1- (length prefix)))
+                                                   ?#)
+                                              ,text))))
+         ;; collect list items into a tree of lists.
+         (ret '())
+         (stack '())
+         (cur '())
+         (ordered-p nil)
+         (finish-list #'(lambda ()
+                          "Create the list node for CUR and put it where it belongs."
+                          (when cur
+                            (let ((l (jira-doc--build-list (reverse cur)
+                                                           ordered-p)))
+                              (if (null stack)
+                                  (push l ret)
+                                ;; add L to the last list-item in the previous list
+                                (pcase-let ((`(,_ordered-p ,parent-list) (car stack)))
+                                  (let ((parent (car parent-list)))
+                                    (setf (alist-get "content" parent nil nil #'equal)
+                                          (append (alist-get "content" parent nil nil #'equal)
+                                                  (list l))))))))))
+         (pop-lists #'(lambda (n)
+                        "Finish N lists on STACK."
+                        (dotimes (_ n)
+                          (funcall finish-list)
+                          (pcase-setq `(,ordered-p ,cur) (pop stack))))))
+    (dolist (b b*)
+      (pcase b
+        (`(list-item ,d ,li-ordered-p ,text)
+         (let ((li (jira-doc--build-list-item
+                    `(("type" . "paragraph")
+                      ;; The documentation for listItem says it doesn't support marks,
+                      ;; but empirically it does, so let's interpret them.
+                      ("content" . ,(jira-doc-build-inline-blocks text)))))
+               (depth (+ (length stack)
+                         (if cur 1 0))))
+           (cond ((> depth d)
+                  ;; the nested lists from DEPTH to D, including
+                  ;; CUR, are finished.
+                  (funcall pop-lists (- depth d)))
+                 ((> d depth)
+                  ;; starting a new list... but if D > (DEPTH+1) we
+                  ;; need to make up intermediate lists with blank
+                  ;; list-items.
+                  (when cur
+                    (push `(,ordered-p ,cur) stack)
+                    (setq cur nil))
+                  (dotimes (_ (- d depth 1))
+                    ;; made-up intermediate lists are ordered if the
+                    ;; first "real" item is ordered. (The parargraph
+                    ;; with no content is what API v3 accepts;
+                    ;; anything else fails with INVALID_INPUT.)
+                    (push `(,li-ordered-p (,(jira-doc--build-list-item
+                                             '((type . "paragraph")))))
+                          stack))))
+           (if (eq ordered-p li-ordered-p)
+               (push li cur)
+             (funcall finish-list)
+             (setq cur (list li)
+                   ordered-p li-ordered-p))))
+        ("\n"
+         ;; EOL after a list item: ignore
+         )
+        (_
+         ;; not a list item: all pending lists are now complete.
+         (funcall pop-lists (length stack))
+         (funcall finish-list)
+         (setq cur nil)
+         (push b ret))))
+
+    ;; end of BLOCK: all pending lists are now complete.
+    (funcall pop-lists (length stack))
+    (funcall finish-list)
+    (reverse ret)))
+
+(defun jira-doc-build-lists (blocks)
+  "Collect list items out of BLOCKS and create bulletList and orderedList nodes."
+  (mapcan #'jira-doc--build-lists blocks))
+
+(defun jira-doc-build-toplevel-blocks (text)
+  "Parse toplevel blocks out of TEXT and convert to ADF nodes."
+  (let ((blocks (jira-doc--split text
+                                 jira-regexp-code-block
+                                 #'jira-doc--build-code-block)))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-blockquote
+                                  #'jira-doc--build-blockquote))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-heading
+                                  #'jira-doc--build-heading))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-hr
+                                  #'jira-doc--build-rule))
+    (setq blocks (jira-doc-build-lists blocks))
+    (mapcar (lambda (s)
+              (if (stringp s)
+                  `(("type" . "paragraph")
+                    ("content" ,@(jira-doc-build-inline-blocks s)))
+                s))
+            blocks)))
+
+(defun jira-doc-build-adf (text)
+  "Build a Jira document (ADF) from TEXT."
+  (let* ((paras (mapcar #'string-trim
+                        (split-string (or text "")
+                                      "\n\\([ 	]*\n\\)+"
+                                      t))))
     `(("type" . "doc") ("version" . 1)
       ("content" .
-       ,(mapcar (lambda (line)
-                  `(("type" . "paragraph")
-                    ("content" . ((("type" . "text") ("text" . ,line))))))
-                lines)))))
+       ,(jira-doc-build-toplevel-blocks paras)))))
+
+
+;;; Building v2 texts.
+
+(defun jira-doc-build-v2 (text)
+  "Format TEXT for Jira API v2."
+  ;; Rewrite `...` into {{...}}.
+  (let ((blocks (jira-doc--split (list text)
+                                 jira-regexp-code
+                                 (lambda (x)
+                                   (concat "{{" x "}}")))))
+    ;; Rewrite mentions into "[~accountid:123456790]". This form is
+    ;; not documented but it's how mentions are rendered in text
+    ;; returned by the v2 API.
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-mention
+                                  (lambda (username)
+                                    (let ((account-id (gethash username jira-users)))
+                                      (concat "[~accountid:" account-id "]")))))
+    (string-join blocks)))
+
+
+;;; Entry point.
+
+(defun jira-doc-build (text)
+  "Build a Jira document from TEXT."
+  (if (= jira-api-version 3)
+      (jira-doc-build-adf text)
+    (jira-doc-build-v2 text)))
+
 
 (provide 'jira-doc)
 
