@@ -369,7 +369,12 @@
     (pop-to-buffer x)
     (insert data)
     (goto-char (point-min))
-    (normal-mode)
+    ;; Bind these so `normal-mode' will check the buffer contents
+    ;; instead of just looking for a -*- line.
+    (let ((buffer-file-name (file-name-concat temporary-file-directory
+                                             name))
+          (default-directory temporary-file-directory))
+      (normal-mode))
     (set-buffer-modified-p t)))
 
 (defun jira-detail--show-other (key)

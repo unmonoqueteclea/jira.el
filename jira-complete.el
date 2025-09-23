@@ -52,7 +52,7 @@
   "Find a Jira issue key at or around the current point."
   (let ((key-regex  "\\b[A-Z0-9]+-[0-9]+\\b"))
     (when (thing-at-point-looking-at key-regex)
-      (match-string 0))))
+      (match-string-no-properties 0))))
 
 (defun jira-complete--get-default-issue-key-input ()
   "Get the default input for issue key completion, from URL or key at point."
@@ -64,7 +64,13 @@
 (defun jira-complete-ask-issue ()
   "Read an issue key or URL from the user and return its key."
   (let* ((default-input (jira-complete--get-default-issue-key-input))
-         (input (read-string (format "Find issue (key or URL): %s" default-input) nil nil default-input))
+         (input (read-string (format "Find issue by key or URL%s: "
+                                     (if (string= default-input "")
+                                         ""
+                                       (concat " (default " default-input ")")))
+                             nil
+                             nil
+                             default-input))
          (key (or (jira-complete--extract-key-from-url input) input)))
     (if (jira-complete--validate-key key)
 	key (message "Invalid Jira issue key or URL: %s" input))))
