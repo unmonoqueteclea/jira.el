@@ -31,6 +31,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'vtable)
+(require 'seq)
 (require 'jira-fmt)
 (require 'jira-api)
 
@@ -155,6 +157,7 @@
      "\n")))
 
 (defun jira-doc--format-media-block (block)
+  "Format BLOCK, a mediaSingle or mediaGroup node, to a string."
   (let ((media (mapcar (lambda (b)
                          (let* ((attrs (alist-get 'attrs b))
                                 (type (alist-get 'type attrs))
@@ -173,6 +176,49 @@
   (concat
    "\n"
    (string-join media "\n"))))
+
+(defun jira-doc--format-table-row (block)
+  (mapcar #'jira-doc--format-content-block
+          (alist-get 'content block)))
+
+(defun jira-doc--format-table (block)
+  "Format BLOCK, a table node, as a string."
+  (let* ((rows (alist-get 'content block))
+         (header (seq-find (lambda (r)
+                             (seq-every-p (lambda (c)
+                                            (string= "tableHeader"
+                                                     (alist-get 'type c)))
+                                          (alist-get 'content r)))
+                           rows))
+         (body (remove header rows))
+         (header (jira-doc--format-table-row header))
+         (body (mapcar #'jira-doc--format-table-row body))
+         (widths (apply #'cl-mapcar
+                        (lambda (&rest col)
+                          (apply #'max (mapcar #'length col)))
+                        (if header
+                            (cons header body)
+                          body)))
+         (table (make-vtable :objects body
+                             :columns
+                             (cl-mapcar (lambda (name width)
+                                          (list :name name
+                                                :width width))
+                                        header
+                                        widths)
+                             :use-header-line nil
+                             ;; Prefer the user's default font over
+                             ;; `vtable' in GUI frames. In TTY frames
+                             ;; that causes weirdly wide spacing
+                             ;; however, so use `vtable' there.
+                             :face (if (display-graphic-p) nil 'vtable)
+                             ;; columns aren't separated at all on TTY frames?
+                             :divider-width (if (display-graphic-p) 0 1)
+                             :insert nil)))
+    (concat "\n"
+            (with-temp-buffer
+              (vtable-insert table)
+              (buffer-string)))))
 
 (defun jira-doc--format-content-block(block)
   "Format content BLOCK to a string."
@@ -196,7 +242,7 @@
             sep))))
     (cond
      ((string= type "table")
-      "\n<TABLES NOT SUPPORTED BY jira.el>\n")
+      (jira-doc--format-table block))
      ((or (string= type "mediaGroup")
           (string= type "mediaSingle"))
       (jira-doc--format-media-block block))
