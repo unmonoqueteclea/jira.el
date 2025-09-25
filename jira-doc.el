@@ -472,6 +472,33 @@ NAME should be a username defined in `jira-users'."
                  "bulletList"))
     ("content" . ,items)))
 
+(defun jira-doc--build-table-row (text separator)
+  "Make an ADF tableRow node and child nodes out of TEXT."
+  (let ((cell-type (if (string= separator "||")
+                       "tableHeader"
+                     "tableCell"))
+        (cells (string-split text separator nil)))
+    ;; Using `jira-doc-build-inline-blocks' here is a compromise. ADF
+    ;; table nodes can contain any toplevel block except another
+    ;; table, but our markup doesn't allow e.g. lists or blockquotes
+    ;; inside table cells. So instead we just scan for inline blocks,
+    ;; whick can all be written inside table markup.
+    `(("type" . "tableRow")
+      ("content" . ,(mapcar #'(lambda (text)
+                                `(("type" . ,cell-type)
+                                  ("content" .
+                                   ((("type" . "paragraph")
+                                     ("content" . ,(jira-doc-build-inline-blocks text)))))))
+                            ;; want to exclude empty strings at bol
+                            ;; and eol, but include empty strings in
+                            ;; the middle.
+                            (take (- (length cells) 2)
+                                  (cdr cells)))))))
+
+(defun jira-doc--build-table (rows)
+  "Make an ADF table node."
+  `(("type" . "table")
+    ("content" . ,rows)))
 
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
@@ -581,6 +608,32 @@ NAME should be a username defined in `jira-users'."
   "Collect list items out of BLOCKS and create bulletList and orderedList nodes."
   (mapcan #'jira-doc--build-lists blocks))
 
+(defun jira-doc-build-tables (blocks)
+  "Collect table rows out of BLOCKS and create table nodes."
+  (let ((res '())
+        (cur-table nil))
+    (dolist (b
+             (jira-doc--split blocks
+                              jira-regexp-table-row
+                              #'jira-doc--build-table-row))
+      (pcase b
+        ((map ("type" "tableRow"))
+         (push b cur-table))
+        ("\n"
+         ;; EOL after a table row: ignore
+         )
+        (_
+         ;; not a table row
+         (when cur-table
+           (push (jira-doc--build-table (reverse cur-table))
+                 res)
+          (setq cur-table nil))
+         (push b res))))
+    (when cur-table
+      (push (jira-doc--build-table (reverse cur-table))
+            res))
+    (reverse res)))
+
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
   (let ((blocks (jira-doc--split text
@@ -595,6 +648,7 @@ NAME should be a username defined in `jira-users'."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-hr
                                   #'jira-doc--build-rule))
+    (setq blocks (jira-doc-build-tables blocks))
     (setq blocks (jira-doc-build-lists blocks))
     (mapcar (lambda (s)
               (if (stringp s)
