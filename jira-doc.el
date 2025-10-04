@@ -31,6 +31,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'vtable)
+(require 'seq)
 (require 'jira-fmt)
 (require 'jira-api)
 
@@ -154,6 +156,70 @@
       (append (list hborder) boxed-lines (list bborder)) "\n")
      "\n")))
 
+(defun jira-doc--format-media-block (block)
+  "Format BLOCK, a mediaSingle or mediaGroup node, to a string."
+  (let ((media (mapcar (lambda (b)
+                         (let* ((attrs (alist-get 'attrs b))
+                                (type (alist-get 'type attrs))
+                                (id (alist-get 'id attrs))
+                                (collection (alist-get 'collection attrs)))
+                           (if (string= type "link")
+                               (let ((name (alist-get 'alt attrs id))
+                                     (marks (jira-doc--marks block)))
+                                 (jira-fmt-with-marks (concat "<" name ">") marks))
+                             (jira-fmt-placeholder (format "<file:%s%s>"
+                                                           (if (string= "" collection)
+                                                               ""
+                                                             (concat collection ":"))
+                                                           id)))))
+                       (alist-get 'content block))))
+  (concat
+   "\n"
+   (string-join media "\n"))))
+
+(defun jira-doc--format-table-row (block)
+  (mapcar #'jira-doc--format-content-block
+          (alist-get 'content block)))
+
+(defun jira-doc--format-table (block)
+  "Format BLOCK, a table node, as a string."
+  (let* ((rows (alist-get 'content block))
+         (header (seq-find (lambda (r)
+                             (seq-every-p (lambda (c)
+                                            (string= "tableHeader"
+                                                     (alist-get 'type c)))
+                                          (alist-get 'content r)))
+                           rows))
+         (body (remove header rows))
+         (header (jira-doc--format-table-row header))
+         (body (mapcar #'jira-doc--format-table-row body))
+         (widths (apply #'cl-mapcar
+                        (lambda (&rest col)
+                          (apply #'max (mapcar #'length col)))
+                        (if header
+                            (cons header body)
+                          body)))
+         (table (make-vtable :objects body
+                             :columns
+                             (cl-mapcar (lambda (name width)
+                                          (list :name name
+                                                :width width))
+                                        header
+                                        widths)
+                             :use-header-line nil
+                             ;; Prefer the user's default font over
+                             ;; `vtable' in GUI frames. In TTY frames
+                             ;; that causes weirdly wide spacing
+                             ;; however, so use `vtable' there.
+                             :face (if (display-graphic-p) nil 'vtable)
+                             ;; columns aren't separated at all on TTY frames?
+                             :divider-width (if (display-graphic-p) 0 1)
+                             :insert nil)))
+    (concat "\n"
+            (with-temp-buffer
+              (vtable-insert table)
+              (buffer-string)))))
+
 (defun jira-doc--format-content-block(block)
   "Format content BLOCK to a string."
   (let* ((type (alist-get 'type block))
@@ -176,7 +242,10 @@
             sep))))
     (cond
      ((string= type "table")
-      "\n<TABLES NOT SUPPORTED BY jira.el>\n")
+      (jira-doc--format-table block))
+     ((or (string= type "mediaGroup")
+          (string= type "mediaSingle"))
+      (jira-doc--format-media-block block))
      ((string= type "codeBlock")
       (concat "\n" (jira-fmt-code content) "\n"))
      ((string= type "blockquote")
@@ -403,6 +472,33 @@ NAME should be a username defined in `jira-users'."
                  "bulletList"))
     ("content" . ,items)))
 
+(defun jira-doc--build-table-row (text separator)
+  "Make an ADF tableRow node and child nodes out of TEXT."
+  (let ((cell-type (if (string= separator "||")
+                       "tableHeader"
+                     "tableCell"))
+        (cells (string-split text separator nil)))
+    ;; Using `jira-doc-build-inline-blocks' here is a compromise. ADF
+    ;; table nodes can contain any toplevel block except another
+    ;; table, but our markup doesn't allow e.g. lists or blockquotes
+    ;; inside table cells. So instead we just scan for inline blocks,
+    ;; whick can all be written inside table markup.
+    `(("type" . "tableRow")
+      ("content" . ,(mapcar #'(lambda (text)
+                                `(("type" . ,cell-type)
+                                  ("content" .
+                                   ((("type" . "paragraph")
+                                     ("content" . ,(jira-doc-build-inline-blocks text)))))))
+                            ;; want to exclude empty strings at bol
+                            ;; and eol, but include empty strings in
+                            ;; the middle.
+                            (take (- (length cells) 2)
+                                  (cdr cells)))))))
+
+(defun jira-doc--build-table (rows)
+  "Make an ADF table node."
+  `(("type" . "table")
+    ("content" . ,rows)))
 
 (defun jira-doc-build-inline-blocks (text)
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes."
@@ -512,6 +608,32 @@ NAME should be a username defined in `jira-users'."
   "Collect list items out of BLOCKS and create bulletList and orderedList nodes."
   (mapcan #'jira-doc--build-lists blocks))
 
+(defun jira-doc-build-tables (blocks)
+  "Collect table rows out of BLOCKS and create table nodes."
+  (let ((res '())
+        (cur-table nil))
+    (dolist (b
+             (jira-doc--split blocks
+                              jira-regexp-table-row
+                              #'jira-doc--build-table-row))
+      (pcase b
+        ((map ("type" "tableRow"))
+         (push b cur-table))
+        ("\n"
+         ;; EOL after a table row: ignore
+         )
+        (_
+         ;; not a table row
+         (when cur-table
+           (push (jira-doc--build-table (reverse cur-table))
+                 res)
+          (setq cur-table nil))
+         (push b res))))
+    (when cur-table
+      (push (jira-doc--build-table (reverse cur-table))
+            res))
+    (reverse res)))
+
 (defun jira-doc-build-toplevel-blocks (text)
   "Parse toplevel blocks out of TEXT and convert to ADF nodes."
   (let ((blocks (jira-doc--split text
@@ -526,6 +648,7 @@ NAME should be a username defined in `jira-users'."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-hr
                                   #'jira-doc--build-rule))
+    (setq blocks (jira-doc-build-tables blocks))
     (setq blocks (jira-doc-build-lists blocks))
     (mapcar (lambda (s)
               (if (stringp s)

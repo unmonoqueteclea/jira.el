@@ -138,6 +138,10 @@ For example:
   "Face for Jira inserted markup."
   :group 'jira)
 
+(defface jira-face-placeholder
+  '((t :inherit font-lock-comment-face))
+  "Face used to show Jira nodes that we don't actually display.")
+
 (defun jira-fmt--alist-p (value)
   (and value (listp value) (or (null value) (consp (car value)))))
 
@@ -305,6 +309,12 @@ Extracts name from the status object."
 	  (jira-fmt-set-face text 'jira-face-emoji-reference)
 	;; otherwise, `text' is probably a normal Unicode emoji
 	text)
+    ""))
+
+(defun jira-fmt-placeholder (text)
+  "Format TEXT as a placeholder."
+  (if (and (stringp text) (not (string-empty-p text)))
+      (jira-fmt-set-face text 'jira-face-placeholder)
     ""))
 
 (defun jira-fmt--color (color-hex)

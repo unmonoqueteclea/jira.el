@@ -77,6 +77,15 @@
 (defconst jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
 
+(defconst jira-regexp-table-row
+  (rx bol
+      (submatch
+       (submatch-n 2 "|" (? "|"))
+       (+ (+? (intersection (not "|") not-newline))
+          (backref 2))
+      (* not-newline)
+      eol)))
+
 (defconst jira-regexp-hr
   (rx bol "----"))
 
@@ -92,6 +101,8 @@
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
      1 font-lock-builtin-face)
+    (,jira-regexp-table-row
+     . 'jira-face-code)
     ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
@@ -175,6 +186,11 @@
 ;;   x = 42;
 ;; }
 ;; {code}
+
+;; Tables:
+;; ||heading 1||heading 2||heading 3||
+;; |col A1|col A2|col A3|
+;; |col B1|col B2|col B3|
 "
   "Instructions included in jira-edit-mode buffers.")
 
