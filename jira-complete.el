@@ -33,7 +33,7 @@
 (require 'org)
 
 (require 'jira-api)
-
+(require 'jira-doc)
 
 (defconst jira-complete--not-allowed-schemas
   '("attachment", "timetracking")
@@ -200,7 +200,11 @@ FD comes from the result of the metadata call."
           (let ((selected (completing-read (format "Select a %s: " fname) choices nil t)))
             `((id . ,(cdr (assoc selected choices))))))))
      (t
-      (read-string (format "Enter value for field %s: " fname))))))
+      (let ((s (read-string (format "Enter value for field %s: " fname))))
+        (if (or (string= "Description" fname)
+                (string= "textarea" schema-type))
+            (jira-doc-build s)
+          s))))))
 
 
 (cl-defun jira-complete--issue-from-metadata
