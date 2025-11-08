@@ -74,6 +74,9 @@ Allowed values in variable `jira-issues-fields'."
   "Hash map to store issue keys and the associated summaries.
 This information is added to worklogs to make it easier to identify")
 
+(defvar jira-issues-sort-key (cons "Status" nil)
+  "Tabulated list sort key used in jira-issues-mode by default.")
+
 (defun jira-issues--api-get-issues (jql callback &optional page-token)
   "Retrieve issues from the given JQL filter and call CALLBACK function.
 
@@ -377,7 +380,7 @@ PAGE-TOKEN is optional and used for pagination."
     (setq tabulated-list-format
           (vconcat (mapcar col-info jira-issues-table-fields))))
 
-  (setq tabulated-list-sort-key (cons "Status" nil))
+  (setq tabulated-list-sort-key jira-issues-sort-key)
   (setq tabulated-list-padding 2)
   (add-hook 'tabulated-list-revert-hook #'jira-issues--refresh nil t)
   (add-hook 'jira-issues-changed-hook #'tablist-revert)
