@@ -207,3 +207,4 @@ This is the list of customizations you can set:
   (setq jira-status-faces '(("Pull-request" . jira-face-pr)))
   ```
 - `jira-datetime-format`: Format string for displaying datetimes (default: `%c`)
+- `jira-jira-issues-sort-key`: Default tabulated-list sort key for jira-issues-mode. Set to nil to preserve order from JQL (default: ("Status" . nil)).
