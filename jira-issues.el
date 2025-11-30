@@ -74,8 +74,14 @@ Allowed values in variable `jira-issues-fields'."
   "Hash map to store issue keys and the associated summaries.
 This information is added to worklogs to make it easier to identify")
 
-(defvar jira-issues-sort-key (cons "Status" nil)
-  "Tabulated list sort key used in jira-issues-mode by default.")
+(defcustom jira-issues-sort-key (cons "Status" nil)
+  "Default tabulated-list sort key for jira-issues-mode.
+Value is a cons (COLUMN . DESCENDING). When DESCENDING is non-nil, sort
+order is descending. COLUMN must match one of the visible tabulated-list
+column headers."
+  :group 'jira
+  :type '(cons (string :tag "Column")
+          (boolean :tag "Descending")))
 
 (defun jira-issues--api-get-issues (jql callback &optional page-token)
   "Retrieve issues from the given JQL filter and call CALLBACK function.
