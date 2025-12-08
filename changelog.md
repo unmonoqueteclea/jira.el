@@ -1,4 +1,8 @@
 # Changelog
+## 2.15.0 (2025-12-08)
+- Expose `tabulated-list-sort-key`
+- Press `h` to open transient actions menu
+
 ## 2.14.1 (2025-11-28)
 -  Fix multi-paragraph code blocks and misrecognized text marks in ADF
 

@@ -349,6 +349,7 @@ PAGE-TOKEN is optional and used for pagination."
   (let ((map (make-sparse-keymap)))
     (define-key map "?" 'jira-issues-actions-menu)
     (define-key map "l" 'jira-issues-menu)
+    (define-key map "h" 'jira-issues-actions-menu)
     (define-key map "H" 'jira-issues--switch-host-and-refresh)
     (define-key map "T" (lambda () (interactive) (jira-issues--jump-to-tempo)))
     (define-key map "f" (lambda () (interactive) (jira-detail-find-issue-by-key)))

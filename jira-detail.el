@@ -635,6 +635,7 @@ CALLBACK is called with the watchers data."
     (define-key map (kbd "g")
 		(lambda () "Refresh issue detail"
 		  (interactive) (jira-detail-show-issue jira-detail--current-key)))
+    (define-key map (kbd "h") 'jira-detail--actions-menu)
     (define-key map (kbd "P")
 		(lambda () "Show parent issue"
 		  (interactive) (jira-detail--show-parent-issue)))
