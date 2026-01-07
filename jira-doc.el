@@ -40,12 +40,12 @@
 (defconst jira-doc--top-level-blocks
   '("blockquote" "bulletList" "codeBlock" "expand" "heading" "mediaGroup"
     "mediaSingle" "orderedList" "panel" "paragraph" "rule" "table"
-    "multiBodiedExtension"))
+    "multiBodiedExtension" "taskList"))
 
 ;; these blocks contain the content property
 (defconst jira-doc--child-blocks
   '("listItem" "media" "nestedExpand" "tableCell" "tableHeader"
-    "tableRow" "extensionFrame"))
+    "tableRow" "extensionFrame" "taskItem"))
 
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
@@ -88,6 +88,18 @@
     (message "The timestamp is %s" timestamp)
     (jira-fmt-date s t)))
 
+(defun jira-doc--format-task-item (block)
+  "Format BLOCK, a taskItem node, as a string."
+  (let* ((attrs (alist-get 'attrs block))
+         (state (alist-get 'state attrs)))
+    (concat "["
+            (if (string= state "TODO")
+                " "
+              "✓")
+            "] "
+            (string-join (mapcar #'jira-doc--format-inline-block
+                                 (alist-get 'content block))))))
+
 (defun jira-doc--marks (block)
   "Return a list of mark attributes from BLOCK."
   (let ((m* '()))
@@ -128,6 +140,8 @@
              (jira-fmt-emoji text)))
           ((string= type "date")
            (jira-doc--format-date block))
+          ((string= type "taskItem")
+           (jira-doc--format-task-item block))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text marks))))))
 
@@ -183,6 +197,13 @@ BLOCK is the media node to format."
        (format "<file:%s%s>"
                (if (string= "" collection) "" (concat collection ":"))
                (if (and alt (not (string= "" alt))) alt id))))))
+
+(defun jira-doc--format-task-list (block)
+  "Format a taskList node to a string."
+  (let ((children (alist-get 'content block)))
+    (string-join (mapcar #'jira-doc--format-inline-block
+                         children)
+                 "\n")))
 
 (defun jira-doc--format-table-row (block)
   "Format a table row BLOCK to a string."
@@ -263,6 +284,8 @@ BLOCK is the media node to format."
 			   ((string= ptype "note") "✏️")
 			   (t ""))))
 	(jira-doc--format-boxed-text content prefix)))
+     ((string= type "taskList")
+      (jira-doc--format-task-list block))
      (t content))))
 
 (defun jira-doc--format-list-block (block)
