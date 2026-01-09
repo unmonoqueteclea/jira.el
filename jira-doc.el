@@ -35,6 +35,7 @@
 (require 'seq)
 (require 'jira-fmt)
 (require 'jira-api)
+(require 'org) ; `org-id-uuid'
 
 ;; these blocks contain the content property
 (defconst jira-doc--top-level-blocks
@@ -532,6 +533,23 @@ SEPARATOR determines if it's a header or cell row."
                             (take (- (length cells) 2)
                                   (cdr cells)))))))
 
+(defun jira-doc--build-task-item (state children)
+  "Make an ADF taskItem node."
+  `(("type" . "taskItem")
+    ("content" ,@children)
+    ("attrs" .
+     (("localId" . ,(org-id-uuid))
+      ("state" . ,(if state
+                      "DONE"
+                    "TODO"))))))
+
+(defun jira-doc--build-task-list (children)
+  "Make an ADF taskList node."
+  `(("type" . "taskList")
+    ("attrs" .
+     (("localId" . ,(org-id-uuid))))
+    ("content" ,@children)))
+
 (defun jira-doc--build-table (rows)
   "Make an ADF table node.
 ROWS are the table rows."
@@ -545,6 +563,7 @@ like other marks, so it's easier to pretend they're blocks."
   (let ((blocks (jira-doc--split (list text)
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
+    (setq blocks (jira-doc-build-task-lists blocks))
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
@@ -671,6 +690,33 @@ like other marks, so it's easier to pretend they're blocks."
          (push b res))))
     (when cur-table
       (push (jira-doc--build-table (reverse cur-table))
+            res))
+    (reverse res)))
+
+(defun jira-doc-build-task-lists (blocks)
+  "Collect task items out of BLCOKS and group them into taskList nodes."
+  (let ((res '())
+        (cur-list nil))
+    (dolist (b
+             (jira-doc--split blocks
+                              jira-regexp-task-item
+                              #'(lambda (marker text)
+                                  (jira-doc--build-task-item (string-match-p (rx "[" (not space) "]")
+                                                                             marker)
+                                                             (jira-doc-build-inline-blocks
+                                                              (string-trim text))))))
+      (pcase b
+        ((map ("type" "taskItem"))
+         (push b cur-list))
+        ("\n")
+        (_
+         (when cur-list
+           (push (jira-doc--build-task-list (reverse cur-list))
+                 res)
+           (setq cur-list nil))
+         (push b res))))
+    (when cur-list
+      (push (jira-doc--build-task-list (reverse cur-list))
             res))
     (reverse res)))
 

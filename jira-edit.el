@@ -70,6 +70,7 @@
   `((,jira-regexp-mention . 'jira-face-mention)
     (,jira-regexp-code . 'jira-face-code)
     (,jira-regexp-link . 'jira-face-link)
+    (,jira-regexp-task-item . 'font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
 
 (defconst jira-regexp-blockquote
@@ -100,10 +101,15 @@
       (submatch (+? not-newline))
       eol))
 
+(defconst jira-regexp-task-item
+  (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
+
 (defvar jira-block-keywords
   `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
+     1 font-lock-builtin-face)
+    (,jira-regexp-task-item
      1 font-lock-builtin-face)
     (,jira-regexp-table-row
      . 'jira-face-code)
@@ -195,6 +201,10 @@
 ;; ||heading 1||heading 2||heading 3||
 ;; |col A1|col A2|col A3|
 ;; |col B1|col B2|col B3|
+
+;; Action items:
+;; [] incomplete task
+;; [x] completed task
 "
   "Instructions included in `jira-edit-mode' buffers.")
 
