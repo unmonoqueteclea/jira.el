@@ -93,11 +93,8 @@
   "Format BLOCK, a taskItem node, as a string."
   (let* ((attrs (alist-get 'attrs block))
          (state (alist-get 'state attrs)))
-    (concat "["
-            (if (string= state "TODO")
-                " "
-              "✓")
-            "] "
+    (concat (jira-fmt-task-item (string= state "DONE"))
+            " "
             (string-join (mapcar #'jira-doc--format-inline-block
                                  (alist-get 'content block))))))
 
