@@ -66,11 +66,14 @@
 (defconst jira-regexp-emoji
   (rx symbol-start ":" (submatch (+ (or lower digit "-"))) ":" symbol-end))
 
+(defconst jira-regexp-task-item
+  (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
+
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
     (,jira-regexp-code . 'jira-face-code)
     (,jira-regexp-link . 'jira-face-link)
-    (,jira-regexp-task-item . 'font-lock-builtin-face)
+    (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
 
 (defconst jira-regexp-blockquote
@@ -101,15 +104,10 @@
       (submatch (+? not-newline))
       eol))
 
-(defconst jira-regexp-task-item
-  (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
-
 (defvar jira-block-keywords
   `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
-     1 font-lock-builtin-face)
-    (,jira-regexp-task-item
      1 font-lock-builtin-face)
     (,jira-regexp-table-row
      . 'jira-face-code)

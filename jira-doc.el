@@ -35,6 +35,7 @@
 (require 'seq)
 (require 'jira-fmt)
 (require 'jira-api)
+(require 'jira-edit)
 (require 'org) ; `org-id-uuid'
 
 ;; these blocks contain the content property
