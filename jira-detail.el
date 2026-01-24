@@ -531,8 +531,8 @@ CALLBACK is called with the watchers data."
                                              comment-id))
                                   comments)))
           (if comment
-              (format "%S" (alist-get 'body comment))
-            (error "Comment %s not found in %s" issue-key)))
+              (jira-doc-markup (alist-get 'body comment))
+            (error "Comment %s not found in %s" comment-id issue-key)))
         (lambda (content)
           (jira-actions-edit-comment issue-key
                                      comment-id

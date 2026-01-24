@@ -328,6 +328,162 @@ BLOCK is the media node to format."
        "\n"))))
 
 
+;; Converting ADF to Jira-style markup.
+
+(defconst jira-doc--markup-marks
+  ;; We need this because sub and sup are attrs in
+  ;; `jira-doc--marks-delimiters', not just symbols.
+  (let ((l `((sub "~")
+             (sup "^"))))
+    (pcase-dolist (`(,char ,kind) jira-doc--marks-delimiters)
+      (if (symbolp kind)
+          (push `(,kind ,char) l)))
+    l)
+  "Inverted copy of `jira-doc--marks-delimiters', mapping mark symbols to markup strings.")
+
+(defun jira-doc--markup-with-marks (text marks)
+  (cond ((alist-get 'link marks)
+         (let ((url (alist-get 'link marks)))
+           (format "[%s|%s]" text url)))
+        ((alist-get 'code marks)
+         (format "`%s`" text))
+        (t
+         (let ((res text))
+           (pcase-dolist (`(,kind ,char) jira-doc--markup-marks)
+             (when (memq kind marks)
+               (setq res (concat char res char))))
+           res))))
+
+(defun jira-doc--markup-mention (block)
+  "Format block, a mention node, as a string with markup."
+  (let* ((attrs (alist-get 'attrs block))
+         (text (string-remove-prefix "@" (alist-get 'text attrs))))
+    ;; FIXME: combine this with `jira-edit-insert-mention'
+    (format "[~%s]" text)))
+
+(defun jira-doc--markup-emoji (block)
+  "Format BLOCK, a taskItem node, as a string with markup."
+  (let ((attrs (alist-get 'attrs block)))
+    ;; if this is a Jira named emoji, it already has the :...: markup,
+    ;; so we can just use that. Otherwise it's a Unicode emoji, so
+    ;; nothing to do 🙂
+    (alist-get 'text attrs)))
+
+(defun jira-doc--markup-task-item (block)
+  "Format BLOCK, a taskItem node, as a string with markup."
+  (let* ((attrs (alist-get 'attrs block))
+         (state (alist-get 'state attrs)))
+    (concat "["
+            (if (string= state "DONE") "x" "")
+            "] "
+            (string-join (mapcar #'jira-doc--markup-inline-block
+                                 (alist-get 'content block))))))
+
+(defun jira-doc--markup-inline-block (block)
+  "Format inline BLOCK to a string with markup."
+  (let ((type (alist-get 'type block))
+        (text (alist-get 'text block)))
+    (cond ((string= type "hardBreak") "\n")
+          ((string= type "mention")
+           (jira-doc--markup-mention block))
+          ((string= type "emoji")
+           (jira-doc--markup-emoji block))
+          ((string= type "taskItem")
+           (jira-doc--markup-task-item block))
+          (text (let ((marks (jira-doc--marks block)))
+                  (jira-doc--markup-with-marks text marks))))))
+
+(defun jira-doc--markup-table-row (block delimiter)
+  "Format BLOCK, a tableRow node, as a string."
+  (concat delimiter
+          (mapconcat #'jira-doc--markup-content-block
+                     (alist-get 'content block)
+                     delimiter)
+          delimiter))
+
+(defun jira-doc--markup-table (block)
+  "Format BLOCK, a table node, as a string."
+  (let* ((rows (alist-get 'content block))
+         (header (seq-find (lambda (r)
+                             (seq-every-p (lambda (c)
+                                            (string= "tableHeader"
+                                                     (alist-get 'type c)))
+                                          (alist-get 'content r)))
+                           rows))
+         (body (mapcar (lambda (r)
+                         (jira-doc--markup-table-row r "|"))
+                       (remove header rows)))
+         (header (if header
+                     (jira-doc--markup-table-row header "||")
+                   nil)))
+    (string-join (if header
+                     (cons header body)
+                   body)
+                 "\n")))
+
+(defun jira-doc--markup-task-list (block)
+  "Format a taskList node to a string."
+  (let ((children (alist-get 'content block)))
+    (string-join (mapcar #'jira-doc--markup-inline-block
+                         children)
+                 "\n")))
+
+(defvar jira-doc--markup-list-prefix "")
+
+(defun jira-doc--markup-content-block (block)
+  "Format content BLOCK to a string with markup."
+  (let* ((type (alist-get 'type block))
+	 (attrs (alist-get 'attrs block))
+         (sep (if (string= type "paragraph") "" "\n"))
+         (prefix (if (string= type "listItem")
+                     (concat jira-doc--markup-list-prefix " ")
+                   ""))
+	 (content
+	  (concat
+	   prefix
+	   (jira-doc--list-to-str
+	    (mapcar (lambda (b) (jira-doc--markup-block b)) (alist-get 'content block))
+            sep))))
+    (cond
+     ((string= type "table")
+      (jira-doc--markup-table block))
+     ((string= type "codeBlock")
+      (concat "\n" "{code}\n" content "{code}\n" "\n"))
+     ((string= type "blockquote")
+      (concat "bq. " content))
+     ((string= type "heading")
+      (format "h%d. %s"
+              (alist-get 'level attrs)
+              content))
+     ((string= type "taskList")
+      (jira-doc--markup-task-list block))
+     (t content))))
+
+(defun jira-doc--markup-block (block)
+  "Format BLOCK to a string with markup."
+  (let ((type (alist-get 'type block)))
+    (cond ((string= type "orderedList")
+           (let ((jira-doc--markup-list-prefix
+                  (concat jira-doc--markup-list-prefix "#")))
+             (jira-doc--markup-content-block block)))
+          ((string= type "bulletList")
+           (let ((jira-doc--markup-list-prefix
+                  (concat jira-doc--markup-list-prefix "*")))
+             (jira-doc--markup-content-block block)))
+          ((or (member type jira-doc--top-level-blocks)
+               (member type jira-doc--child-blocks))
+           (jira-doc--markup-content-block block))
+          (t
+           (jira-doc--markup-inline-block block)))))
+
+(defun jira-doc-markup (doc)
+  "Format DOC with markup for `jira-edit-mode'."
+  (let ((content (alist-get 'content doc)))
+    (jira-doc--list-to-str
+     (mapcar #'jira-doc--markup-block content)
+     "\n\n")))
+
+
 ;; Building ADF from Jira-style markdown.
 
 (defun jira-doc--collect-marks (text)
