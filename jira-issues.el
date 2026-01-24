@@ -52,6 +52,15 @@ Allowed values in variable `jira-issues-fields'."
   "Maximum number of Jira issues to retrieve."
   :group 'jira :type 'integer)
 
+(defcustom jira-issues-default-type nil
+  "Default issue type filter for the issues list.
+When set to a type name (e.g., \"Epic\", \"Story\", \"Bug\"), the issues
+list will automatically filter to show only that type unless explicitly
+overridden via the transient menu."
+  :group 'jira
+  :type '(choice (const :tag "No default filter" nil)
+                 (string :tag "Issue type name")))
+
 (defvar jira-issues--loading-p nil
   "A flag to indicate if an API call is in progress.")
 (defvar jira-issues--current-jql nil
@@ -196,7 +205,9 @@ PAGE-TOKEN is optional and used for pagination."
          (version (transient-arg-value "--version=" args))
          (assignee (transient-arg-value "--assignee=" args))
          (reporter (transient-arg-value "--reporter=" args))
-         (issue-type (transient-arg-value "--type=" args)))
+         (issue-type (transient-arg-value "--type=" args))
+         ;; Use explicit type if set, otherwise fall back to default
+         (effective-type (or issue-type jira-issues-default-type)))
     (let ((additional-filters
            (list (when myself "assignee = currentUser()")
                  (when current-sprint "sprint in openSprints()")
@@ -204,7 +215,7 @@ PAGE-TOKEN is optional and used for pagination."
                  (when project (concat "project = \"" project "\""))
                  (when resolution (concat "resolution = \"" resolution "\""))
                  (when version (concat "fixversion = \"" version "\""))
-                 (when issue-type (concat "issuetype = \"" issue-type "\""))
+                 (when effective-type (concat "issuetype = \"" effective-type "\""))
                  (when assignee
                    (if (string-match-p "EMPTY" assignee)
                        "assignee = EMPTY"
@@ -240,10 +251,17 @@ PAGE-TOKEN is optional and used for pagination."
 
 
 
+(defun jira-issues--transient-default-value ()
+  "Return default transient value including default issue type if set."
+  (let ((defaults '("--myself")))
+    (when jira-issues-default-type
+      (push (concat "--type=" jira-issues-default-type) defaults))
+    defaults))
+
 (transient-define-prefix jira-issues-menu ()
   "Show menu for listing Jira Issues."
   :refresh-suffixes t
-  :value '("--myself")
+  :value #'jira-issues--transient-default-value
   [["Arguments"
     ("a" "Assignee" "--assignee="
      :transient transient--do-call
