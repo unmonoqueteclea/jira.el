@@ -377,8 +377,7 @@ This is a shared function used by both subtasks and linked issues."
 (defvar-keymap jira-subtask-section-map
   :doc "Keymap for Jira subtask sections."
   "<RET>" #'jira-detail--open-subtask-at-point
-  "o" #'jira-detail--open-subtask-in-browser
-  "c" #'jira-detail--change-subtask-status)
+  "o" #'jira-detail--open-subtask-in-browser)
 
 (defclass jira-subtask-section (magit-section)
   ((keymap :initform 'jira-subtask-section-map)))
@@ -394,15 +393,6 @@ This is a shared function used by both subtasks and linked issues."
   (interactive)
   (when-let ((subtask-key (magit-section-value-if 'jira-subtask-section)))
     (jira-actions-open-issue subtask-key)))
-
-(defun jira-detail--change-subtask-status ()
-  "Change the status of the subtask at point."
-  (interactive)
-  (when-let ((subtask-key (magit-section-value-if 'jira-subtask-section)))
-    ;; Temporarily set the current key to the subtask so that
-    ;; jira-actions-change-issue-menu operates on the subtask
-    (let ((jira-detail--current-key subtask-key))
-      (call-interactively #'jira-actions-change-issue-menu))))
 
 (defun jira-detail--subtask-at-point-p ()
   "Return non-nil if point is on a subtask section."
@@ -642,8 +632,7 @@ CALLBACK is called with the watchers data."
     (lambda () (interactive) (jira-detail--create-subtask)))]
   [:if jira-detail--subtask-at-point-p
    ("RET" "Open subtask" jira-detail--open-subtask-at-point)
-   ("o" "Open subtask in browser" jira-detail--open-subtask-in-browser)
-   ("s c" "Change subtask status" jira-detail--change-subtask-status)])
+   ("o" "Open subtask in browser" jira-detail--open-subtask-in-browser)])
 
 (defvar jira-detail-changed-hook nil
   "Hook run after a Jira issue has been changed in jira-detail-mode.")
