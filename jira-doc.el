@@ -35,17 +35,19 @@
 (require 'seq)
 (require 'jira-fmt)
 (require 'jira-api)
+(require 'jira-edit)
+(require 'org) ; `org-id-uuid'
 
 ;; these blocks contain the content property
 (defconst jira-doc--top-level-blocks
   '("blockquote" "bulletList" "codeBlock" "expand" "heading" "mediaGroup"
     "mediaSingle" "orderedList" "panel" "paragraph" "rule" "table"
-    "multiBodiedExtension"))
+    "multiBodiedExtension" "taskList"))
 
 ;; these blocks contain the content property
 (defconst jira-doc--child-blocks
   '("listItem" "media" "nestedExpand" "tableCell" "tableHeader"
-    "tableRow" "extensionFrame"))
+    "tableRow" "extensionFrame" "taskItem"))
 
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
@@ -88,6 +90,15 @@
     (message "The timestamp is %s" timestamp)
     (jira-fmt-date s t)))
 
+(defun jira-doc--format-task-item (block)
+  "Format BLOCK, a taskItem node, as a string."
+  (let* ((attrs (alist-get 'attrs block))
+         (state (alist-get 'state attrs)))
+    (concat (jira-fmt-task-item (string= state "DONE"))
+            " "
+            (string-join (mapcar #'jira-doc--format-inline-block
+                                 (alist-get 'content block))))))
+
 (defun jira-doc--marks (block)
   "Return a list of mark attributes from BLOCK."
   (let ((m* '()))
@@ -128,6 +139,8 @@
              (jira-fmt-emoji text)))
           ((string= type "date")
            (jira-doc--format-date block))
+          ((string= type "taskItem")
+           (jira-doc--format-task-item block))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-fmt-with-marks text marks))))))
 
@@ -183,6 +196,13 @@ BLOCK is the media node to format."
        (format "<file:%s%s>"
                (if (string= "" collection) "" (concat collection ":"))
                (if (and alt (not (string= "" alt))) alt id))))))
+
+(defun jira-doc--format-task-list (block)
+  "Format a taskList node to a string."
+  (let ((children (alist-get 'content block)))
+    (string-join (mapcar #'jira-doc--format-inline-block
+                         children)
+                 "\n")))
 
 (defun jira-doc--format-table-row (block)
   "Format a table row BLOCK to a string."
@@ -263,6 +283,8 @@ BLOCK is the media node to format."
 			   ((string= ptype "note") "✏️")
 			   (t ""))))
 	(jira-doc--format-boxed-text content prefix)))
+     ((string= type "taskList")
+      (jira-doc--format-task-list block))
      (t content))))
 
 (defun jira-doc--format-list-block (block)
@@ -509,6 +531,23 @@ SEPARATOR determines if it's a header or cell row."
                             (take (- (length cells) 2)
                                   (cdr cells)))))))
 
+(defun jira-doc--build-task-item (state children)
+  "Make an ADF taskItem node."
+  `(("type" . "taskItem")
+    ("content" ,@children)
+    ("attrs" .
+     (("localId" . ,(org-id-uuid))
+      ("state" . ,(if state
+                      "DONE"
+                    "TODO"))))))
+
+(defun jira-doc--build-task-list (children)
+  "Make an ADF taskList node."
+  `(("type" . "taskList")
+    ("attrs" .
+     (("localId" . ,(org-id-uuid))))
+    ("content" ,@children)))
+
 (defun jira-doc--build-table (rows)
   "Make an ADF table node.
 ROWS are the table rows."
@@ -522,6 +561,7 @@ like other marks, so it's easier to pretend they're blocks."
   (let ((blocks (jira-doc--split (list text)
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
+    (setq blocks (jira-doc-build-task-lists blocks))
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
@@ -648,6 +688,33 @@ like other marks, so it's easier to pretend they're blocks."
          (push b res))))
     (when cur-table
       (push (jira-doc--build-table (reverse cur-table))
+            res))
+    (reverse res)))
+
+(defun jira-doc-build-task-lists (blocks)
+  "Collect task items out of BLCOKS and group them into taskList nodes."
+  (let ((res '())
+        (cur-list nil))
+    (dolist (b
+             (jira-doc--split blocks
+                              jira-regexp-task-item
+                              #'(lambda (marker text)
+                                  (jira-doc--build-task-item (string-match-p (rx "[" (not space) "]")
+                                                                             marker)
+                                                             (jira-doc-build-inline-blocks
+                                                              (string-trim text))))))
+      (pcase b
+        ((map ("type" "taskItem"))
+         (push b cur-list))
+        ("\n")
+        (_
+         (when cur-list
+           (push (jira-doc--build-task-list (reverse cur-list))
+                 res)
+           (setq cur-list nil))
+         (push b res))))
+    (when cur-list
+      (push (jira-doc--build-task-list (reverse cur-list))
             res))
     (reverse res)))
 
