@@ -207,7 +207,11 @@ PAGE-TOKEN is optional and used for pagination."
          (reporter (transient-arg-value "--reporter=" args))
          (issue-type (transient-arg-value "--type=" args))
          ;; Use explicit type if set, otherwise fall back to default
-         (effective-type (or issue-type jira-issues-default-type)))
+         ;; If type is "" (Any), then it's effectively nil (no filter)
+         (effective-type (cond
+                          ((string= issue-type "") nil)
+                          (issue-type issue-type)
+                          (t jira-issues-default-type))))
     (let ((additional-filters
            (list (when myself "assignee = currentUser()")
                  (when current-sprint "sprint in openSprints()")
@@ -298,7 +302,7 @@ PAGE-TOKEN is optional and used for pagination."
     ("t" "Issue Type" "--type="
      :transient t
      :choices
-     (lambda () (mapcar #'car jira-issue-types)))]
+     (lambda () (cons '("Any" "") (mapcar #'car jira-issue-types))))]
    ["Arguments Help"
     ("C-x" :info (concat (jira-fmt-set-face "Check " 'italic)
                          "additional options"))
