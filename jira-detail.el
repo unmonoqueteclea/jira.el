@@ -398,6 +398,16 @@ If `jira-detail-reuse-buffer' is enabled, reuse a single buffer for all issues."
                       (jira-detail--format-linked-issue issue link-type direction)))))
               (insert "\n"))))))))
 
+(defun jira-detail--format-entry-content (key summary status &optional link-text type-name)
+  "Format the content of an issue entry line.
+KEY, SUMMARY and STATUS are required. LINK-TEXT and TYPE-NAME are optional."
+  (format " - %s%s %s%s %s\n"
+          (if link-text (concat "[" link-text "] ") "")
+          (jira-fmt-issue-key-not-tabulated key)
+          (if type-name (concat "[" type-name "] ") "")
+          (jira-fmt-issue-status status)
+          summary))
+
 (defun jira-detail--format-issue-entry (issue &optional link-text)
   "Format a single ISSUE entry, optionally with LINK-TEXT for linked issues.
 This is a shared function used by both subtasks and linked issues."
@@ -406,11 +416,8 @@ This is a shared function used by both subtasks and linked issues."
          (issue-summary (alist-get 'summary issue-fields))
          (issue-status (alist-get 'status issue-fields)))
     (if (and (stringp issue-key) (stringp issue-summary))
-        (insert (format " - %s %s %s %s\n"
-                        (if link-text (concat "[" link-text "]") "")
-                        (jira-fmt-issue-key-not-tabulated issue-key)
-                        (jira-fmt-issue-status issue-status)
-                        issue-summary))
+        (insert (jira-detail--format-entry-content
+                 issue-key issue-summary issue-status link-text))
       (insert (format " - [Invalid issue data: %s]\n" issue-key)))))
 
 (defun jira-detail--format-child-issue-entry (issue)
@@ -423,11 +430,8 @@ This is a shared function used by both subtasks and linked issues."
          (type-name (alist-get 'name issue-type)))
     (if (and (stringp issue-key) (stringp issue-summary))
         (magit-insert-section (jira-child-issue-section (cons issue-key issue-summary) nil)
-          (insert (format " - %s [%s] %s %s\n"
-                          (jira-fmt-issue-key-not-tabulated issue-key)
-                          (or type-name "?")
-                          (jira-fmt-issue-status issue-status)
-                          issue-summary)))
+          (insert (jira-detail--format-entry-content
+                   issue-key issue-summary issue-status nil type-name)))
       (insert (format " - [Invalid issue data: %s]\n" issue-key)))))
 
 (defun jira-detail--format-linked-issue (issue link-type direction)
