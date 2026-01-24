@@ -349,9 +349,13 @@ BLOCK is the media node to format."
          (format "`%s`" text))
         (t
          (let ((res text))
-           (pcase-dolist (`(,kind ,char) jira-doc--markup-marks)
-             (when (memq kind marks)
-               (setq res (concat char res char))))
+           (dolist (m marks)
+             (pcase (assq m jira-doc--markup-marks)
+               (`(,_kind ,char)
+                 (setq res (concat char res char)))
+               (_
+                (message "[Jira Doc Error]: discarding unsupported mark '%s'"
+                         m))))
            res))))
 
 (defun jira-doc--markup-mention (block)
@@ -379,6 +383,17 @@ BLOCK is the media node to format."
             (string-join (mapcar #'jira-doc--markup-inline-block
                                  (alist-get 'content block))))))
 
+(defvar-local jira-doc--warn-unsupported t)
+
+(defun jira-doc--markup-unsupported (block)
+  "Warn about BLOCK which cannot be converted to markup."
+  (when jira-doc--warn-unsupported
+    (if (y-or-n-p "Jira Doc: the document you are editing contains elements which cannot be represented in markup. Proceed?")
+        (setq jira-doc--warn-unsupported nil)
+      (keyboard-quit)))
+  (message "[Jira Doc Error]: %s node not supported in markup; it will be lost!"
+           (alist-get 'type block)))
+
 (defun jira-doc--markup-inline-block (block)
   "Format inline BLOCK to a string with markup."
   (let ((type (alist-get 'type block))
@@ -391,7 +406,10 @@ BLOCK is the media node to format."
           ((string= type "taskItem")
            (jira-doc--markup-task-item block))
           (text (let ((marks (jira-doc--marks block)))
-                  (jira-doc--markup-with-marks text marks))))))
+                  (jira-doc--markup-with-marks text marks)))
+          (t
+           (jira-doc--markup-unsupported block)
+           ""))))
 
 (defun jira-doc--markup-table-row (block delimiter)
   "Format BLOCK, a tableRow node, as a string."
@@ -457,6 +475,10 @@ BLOCK is the media node to format."
               content))
      ((string= type "taskList")
       (jira-doc--markup-task-list block))
+     ((and (null (alist-get 'content block))
+           (not (string= type "paragraph")))
+      (jira-doc--markup-unsupported block)
+      (format ";; %s node was here" type))
      (t content))))
 
 (defun jira-doc--markup-block (block)
@@ -478,6 +500,7 @@ BLOCK is the media node to format."
 
 (defun jira-doc-markup (doc)
   "Format DOC with markup for `jira-edit-mode'."
+  (setq jira-doc--warn-unsupported t)
   (let ((content (alist-get 'content doc)))
     (jira-doc--list-to-str
      (mapcar #'jira-doc--markup-block content)
