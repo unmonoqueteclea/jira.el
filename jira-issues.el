@@ -359,6 +359,8 @@ PAGE-TOKEN is optional and used for pagination."
     (define-key map "C" 'jira-actions-change-issue-menu)
     (define-key map "I" (lambda () (interactive)
                           (jira-detail-show-issue (jira-utils-marked-item))))
+    (define-key map (kbd "RET") (lambda () (interactive)
+                                  (jira-detail-show-issue (jira-utils-marked-item))))
     (define-key map "O" (lambda () (interactive)
                           (jira-actions-open-issue (jira-utils-marked-item))))
     (define-key map "W" 'jira-actions-add-worklog-menu)
