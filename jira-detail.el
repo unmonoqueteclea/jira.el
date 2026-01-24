@@ -79,7 +79,7 @@
   t
   "The order to display Jira comments."
   :type '(choice (const :tag "Newest first" t)
-                 (const :tag "Oldest first" nil))
+          (const :tag "Oldest first" nil))
   :group 'jira)
 
 (defcustom jira-detail-reuse-buffer
@@ -310,7 +310,9 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
               (magit-insert-heading "🔗 Subtasks")
               (magit-insert-section-body
 		(seq-doseq (subtask subtasks)
-                  (jira-detail--format-issue-entry subtask)))
+                  (let ((subtask-key (alist-get 'key subtask)))
+                    (magit-insert-section (jira-subtask-section subtask-key nil)
+                      (jira-detail--format-issue-entry subtask)))))
               (insert "\n"))))))))
 
 (defun jira-detail--get-issue-buffer (key)
@@ -371,6 +373,40 @@ This is a shared function used by both subtasks and linked issues."
                         (alist-get 'outward link-type)
                       (alist-get 'inward link-type))))
     (jira-detail--format-issue-entry issue (or link-text "[Unknown link type]"))))
+
+(defvar-keymap jira-subtask-section-map
+  :doc "Keymap for Jira subtask sections."
+  "<RET>" #'jira-detail--open-subtask-at-point
+  "o" #'jira-detail--open-subtask-in-browser
+  "c" #'jira-detail--change-subtask-status)
+
+(defclass jira-subtask-section (magit-section)
+  ((keymap :initform 'jira-subtask-section-map)))
+
+(defun jira-detail--open-subtask-at-point ()
+  "Open the subtask at point in the detail view."
+  (interactive)
+  (when-let ((subtask-key (magit-section-value-if 'jira-subtask-section)))
+    (jira-detail-show-issue subtask-key)))
+
+(defun jira-detail--open-subtask-in-browser ()
+  "Open the subtask at point in the browser."
+  (interactive)
+  (when-let ((subtask-key (magit-section-value-if 'jira-subtask-section)))
+    (jira-actions-open-issue subtask-key)))
+
+(defun jira-detail--change-subtask-status ()
+  "Change the status of the subtask at point."
+  (interactive)
+  (when-let ((subtask-key (magit-section-value-if 'jira-subtask-section)))
+    ;; Temporarily set the current key to the subtask so that
+    ;; jira-actions-change-issue-menu operates on the subtask
+    (let ((jira-detail--current-key subtask-key))
+      (call-interactively #'jira-actions-change-issue-menu))))
+
+(defun jira-detail--subtask-at-point-p ()
+  "Return non-nil if point is on a subtask section."
+  (magit-section-value-if 'jira-subtask-section))
 
 (defvar-keymap jira-attachment-section-map
   :doc "Keymap for Jira attachment sections."
@@ -435,7 +471,7 @@ This is a shared function used by both subtasks and linked issues."
     ;; Bind these so `normal-mode' will check the buffer contents
     ;; instead of just looking for a -*- line.
     (let ((buffer-file-name (file-name-concat temporary-file-directory
-                                             name))
+                                              name))
           (default-directory temporary-file-directory))
       (normal-mode))
     (set-buffer-modified-p t)))
@@ -592,7 +628,6 @@ CALLBACK is called with the watchers data."
    ("O" "Open issue in browser"
     (lambda () (interactive) (jira-actions-open-issue jira-detail--current-key)))
    ("P" "Show parent issue" (lambda () (interactive) (jira-detail--show-parent-issue)))
-   ("S" "Add subtask" (lambda () (interactive) (jira-detail--create-subtask)))
    ("U" "Update issue field"
     (lambda () (interactive) (jira-detail--update-field)))
    ("w" "Update watchers" jira-detail--watchers-menu)
@@ -602,7 +637,13 @@ CALLBACK is called with the watchers data."
     (lambda () (interactive)
       (jira-actions-copy-issues-id-to-clipboard jira-detail--current-key)))
    ("g" "Refresh issue detail"
-    (lambda () (interactive) (jira-detail-show-issue jira-detail--current-key)))])
+    (lambda () (interactive) (jira-detail-show-issue jira-detail--current-key)))
+   ("S" "Add subtask"
+    (lambda () (interactive) (jira-detail--create-subtask)))]
+  [:if jira-detail--subtask-at-point-p
+   ("RET" "Open subtask" jira-detail--open-subtask-at-point)
+   ("o" "Open subtask in browser" jira-detail--open-subtask-in-browser)
+   ("s c" "Change subtask status" jira-detail--change-subtask-status)])
 
 (defvar jira-detail-changed-hook nil
   "Hook run after a Jira issue has been changed in jira-detail-mode.")
