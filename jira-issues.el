@@ -68,7 +68,7 @@ Allowed values in variable `jira-issues-fields'."
 
 ;; files that we always want to retrieve because they are used
 ;; in some operations
-(defvar jira-issues-required-fields '("key" "summary"))
+(defvar jira-issues-required-fields '("key" "summary" "parent" "issuetype"))
 
 (defvar jira-issues-key-summary-map nil
   "Hash map to store issue keys and the associated summaries.
@@ -82,6 +82,22 @@ column headers."
   :group 'jira
   :type '(cons (string :tag "Column")
           (boolean :tag "Descending")))
+
+(defcustom jira-issues-hierarchy-sort nil
+  "When non-nil, sort issues in hierarchical order.
+Epics appear first, followed by their child stories/tasks, with subtasks
+nested under their parent tasks. Visual indentation shows the hierarchy.
+
+Note: Sorting is applied client-side to the current page of results. If a
+child issue is on a different page than its parent, it will appear as a
+top-level item. Increasing `jira-issues-max-results' can help mitigate this."
+  :group 'jira
+  :type 'boolean)
+
+(defcustom jira-issues-hierarchy-indent "  "
+  "String used for each level of hierarchy indentation."
+  :group 'jira
+  :type 'string)
 
 (defun jira-issues--api-get-issues (jql callback &optional page-token)
   "Retrieve issues from the given JQL filter and call CALLBACK function.
@@ -172,10 +188,100 @@ PAGE-TOKEN is optional and used for pagination."
     (when jira-debug
       (message "Jira Issues: Page %d" (1+ (length jira-issues--pagination-previous))))
     (setq jira-issues--raw-issues issues)
-    (setq tabulated-list-entries (mapcar #'jira-issues--data-format-issue issues))
+    (setq tabulated-list-entries
+          (if jira-issues-hierarchy-sort
+              (jira-issues--format-hierarchical issues)
+            (mapcar #'jira-issues--data-format-issue issues)))
     (setq jira-issues-key-summary-map (jira-issues-store-issues-info issues))
     (tabulated-list-print t)
     (setq jira-issues--loading-p nil)))
+
+;;; Hierarchical sorting
+
+(defun jira-issues--get-parent-key (issue)
+  "Get the parent key for ISSUE, or nil if no parent."
+  (let* ((fields (alist-get 'fields issue))
+         (parent (alist-get 'parent fields)))
+    (when parent (alist-get 'key parent))))
+
+(defun jira-issues--get-issue-type (issue)
+  "Get the issue type name for ISSUE."
+  (let* ((fields (alist-get 'fields issue))
+         (issuetype (alist-get 'issuetype fields)))
+    (when issuetype (alist-get 'name issuetype))))
+
+(defun jira-issues--is-epic-p (issue)
+  "Return non-nil if ISSUE is an Epic."
+  (string= (jira-issues--get-issue-type issue) "Epic"))
+
+(defun jira-issues--build-hierarchy (issues)
+  "Build a hierarchy structure from ISSUES.
+Returns an alist mapping parent-key to list of child issues.
+Issues without parents (top-level) are under the key nil."
+  (let ((hierarchy (make-hash-table :test 'equal))
+        (issue-map (make-hash-table :test 'equal)))
+    ;; First pass: index all issues by key
+    (seq-doseq (issue issues)
+      (let ((key (alist-get 'key issue)))
+        (puthash key issue issue-map)))
+    ;; Second pass: group by parent
+    (seq-doseq (issue issues)
+      (let* ((parent-key (jira-issues--get-parent-key issue))
+             ;; Only group under parent if parent is in current result set
+             (effective-parent (if (and parent-key (gethash parent-key issue-map))
+                                   parent-key
+                                 nil))
+             (siblings (gethash effective-parent hierarchy)))
+        (puthash effective-parent (cons issue siblings) hierarchy)))
+    ;; Reverse all lists to maintain original order
+    (maphash (lambda (k v) (puthash k (nreverse v) hierarchy)) hierarchy)
+    (list hierarchy issue-map)))
+
+(defun jira-issues--sort-hierarchical (issues)
+  "Sort ISSUES in hierarchical order.
+Returns a list of (issue . depth) pairs."
+  (let* ((result (jira-issues--build-hierarchy issues))
+         (hierarchy (car result))
+         (output nil))
+    (cl-labels ((visit (parent-key depth)
+                  (let ((children (gethash parent-key hierarchy)))
+                    ;; Sort children: Epics first, then by type, then by key
+                    (setq children
+                          (sort children
+                                (lambda (a b)
+                                  (let ((a-epic (jira-issues--is-epic-p a))
+                                        (b-epic (jira-issues--is-epic-p b)))
+                                    (cond
+                                     ((and a-epic (not b-epic)) t)
+                                     ((and (not a-epic) b-epic) nil)
+                                     (t (string< (alist-get 'key a)
+                                                 (alist-get 'key b))))))))
+                    (dolist (child children)
+                      (push (cons child depth) output)
+                      (visit (alist-get 'key child) (1+ depth))))))
+      (visit nil 0))
+    (nreverse output)))
+
+(defun jira-issues--format-issue-with-hierarchy (issue-depth)
+  (let* ((issue (car issue-depth))
+         (depth (cdr issue-depth))
+         (indent (make-string (* depth (length jira-issues-hierarchy-indent))
+                              ?\s))
+         (formatted (jira-issues--data-format-issue issue))
+         (key (car formatted))
+         (columns (cadr formatted))
+         (col (aref columns 0))
+         (col-label (car col))
+         (labeled (concat indent col-label)))
+    (setf (nth 0 col) labeled)
+    ;; Add indentation to the first column (Key)
+    (aset columns 0 col)
+    (list key columns)))
+
+(defun jira-issues--format-hierarchical (issues)
+  "Format ISSUES with hierarchical sorting and indentation."
+  (let ((sorted (jira-issues--sort-hierarchical issues)))
+    (mapcar #'jira-issues--format-issue-with-hierarchy sorted)))
 
 (defun jira-issues--reset-pagination ()
   "Reset pagination state to start from the beginning."
@@ -280,7 +386,10 @@ PAGE-TOKEN is optional and used for pagination."
     ("t" "Issue Type" "--type="
      :transient t
      :choices
-     (lambda () (mapcar #'car jira-issue-types)))]
+     (lambda () (mapcar #'car jira-issue-types)))
+    ("H" "Hierarchy sort" "--hierarchy"
+     :variable jira-issues-hierarchy-sort
+     :transient t)]
    ["Arguments Help"
     ("C-x" :info (concat (jira-fmt-set-face "Check " 'italic)
                          "additional options"))
