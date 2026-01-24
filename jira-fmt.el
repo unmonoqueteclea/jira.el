@@ -409,6 +409,16 @@ See `jira-doc--marks' for the expected format of MARKS."
 	  text))
     ""))
 
+(defun jira-fmt-task-item (state)
+  "Return a taskItem label with status STATE."
+  (jira-fmt-set-face (format "[%c]"
+                             (if state
+                                 ?✓
+                               ? ))
+                     (if state
+                         'jira-face-status-done
+                       'jira-face-status-todo)))
+
 (provide 'jira-fmt)
 
 ;;; jira-fmt.el ends here
