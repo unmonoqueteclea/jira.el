@@ -28,6 +28,11 @@
 ;; See https://developer.atlassian.com/cloud/jira/platform/apis/document/
 ;; Not all the kinds of blocks are supported yet, only the most common ones.
 
+;; There are three entry points in this file:
+;; * convert ADF to formatted text: `jira-doc-format'
+;; * convert ADF to markup: `jira-doc-markup'
+;; * convert markup to ADF: `jira-doc-build'
+
 ;;; Code:
 
 (require 'cl-lib)
