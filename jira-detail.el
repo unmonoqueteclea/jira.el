@@ -369,10 +369,12 @@ This is a shared function used by both subtasks and linked issues."
 
 (defun jira-detail--format-linked-issue (issue link-type direction)
   "Format a single linked ISSUE with LINK-TYPE and DIRECTION."
-  (let* ((link-text (if (string= direction "outward")
+  (let* ((issue-key (alist-get 'key issue))
+         (link-text (if (string= direction "outward")
                         (alist-get 'outward link-type)
                       (alist-get 'inward link-type))))
-    (jira-detail--format-issue-entry issue (or link-text "[Unknown link type]"))))
+    (magit-insert-section (jira-linked-issue-section issue-key nil)
+      (jira-detail--format-issue-entry issue (or link-text "[Unknown link type]")))))
 
 (defvar-keymap jira-subtask-section-map
   :doc "Keymap for Jira subtask sections."
@@ -381,6 +383,38 @@ This is a shared function used by both subtasks and linked issues."
 
 (defclass jira-subtask-section (magit-section)
   ((keymap :initform 'jira-subtask-section-map)))
+
+(defvar-keymap jira-linked-issue-section-map
+  :doc "Keymap for Jira linked issue sections."
+  "<RET>" #'jira-detail--open-linked-issue-at-point
+  "o" #'jira-detail--open-linked-issue-in-browser
+  "c" #'jira-detail--change-linked-issue-status)
+
+(defclass jira-linked-issue-section (magit-section)
+  ((keymap :initform 'jira-linked-issue-section-map)))
+
+(defun jira-detail--open-linked-issue-at-point ()
+  "Open the linked issue at point in the detail view."
+  (interactive)
+  (when-let ((issue-key (magit-section-value-if 'jira-linked-issue-section)))
+    (jira-detail-show-issue issue-key)))
+
+(defun jira-detail--open-linked-issue-in-browser ()
+  "Open the linked issue at point in the browser."
+  (interactive)
+  (when-let ((issue-key (magit-section-value-if 'jira-linked-issue-section)))
+    (jira-actions-open-issue issue-key)))
+
+(defun jira-detail--change-linked-issue-status ()
+  "Change the status of the linked issue at point."
+  (interactive)
+  (when-let ((issue-key (magit-section-value-if 'jira-linked-issue-section)))
+    (let ((jira-detail--current-key issue-key))
+      (call-interactively #'jira-actions-change-issue-menu))))
+
+(defun jira-detail--linked-issue-at-point-p ()
+  "Return non-nil if point is on a linked issue section."
+  (magit-section-value-if 'jira-linked-issue-section))
 
 (defun jira-detail--open-subtask-at-point ()
   "Open the subtask at point in the detail view."
@@ -631,8 +665,13 @@ CALLBACK is called with the watchers data."
    ("S" "Add subtask"
     (lambda () (interactive) (jira-detail--create-subtask)))]
   [:if jira-detail--subtask-at-point-p
+   "Subtask at point"
    ("RET" "Open subtask" jira-detail--open-subtask-at-point)
-   ("o" "Open subtask in browser" jira-detail--open-subtask-in-browser)])
+   ("o" "Open subtask in browser" jira-detail--open-subtask-in-browser)]
+  [:if jira-detail--linked-issue-at-point-p
+   "Linked issue at point"
+   ("RET" "Open linked issue" jira-detail--open-linked-issue-at-point)
+   ("o" "Open linked issue in browser" jira-detail--open-linked-issue-in-browser)])
 
 (defvar jira-detail-changed-hook nil
   "Hook run after a Jira issue has been changed in jira-detail-mode.")
