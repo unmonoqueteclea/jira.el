@@ -86,6 +86,7 @@ Each URL should be a complete Jira URL like: https://acme.atlassian.net"
 (defvar jira-filters nil "Jira user filters.")
 (defvar jira-projects nil "Jira projects (5 most recent).")
 (defvar jira-projects-versions nil "Jira project versions (releases).")
+(defvar jira-issue-types nil "Jira issue types available in the instance.")
 (defvar jira-search-endpoint nil "Cached search endpoint: \\='search\\=' or \\='search/jql\\='.")
 
 (defvar jira-current-url nil "Currently active Jira URL for multi-instance support.")
@@ -155,7 +156,8 @@ Each URL should be a complete Jira URL like: https://acme.atlassian.net"
         jira-filters nil
         jira-projects nil
         jira-projects-versions nil
-        jira-search-endpoint nil))
+        jira-search-endpoint nil
+        jira-issue-types nil))
 
 (defun jira-api--initialize-current-url ()
   "Initialize URL system for backward compatibility.
@@ -399,6 +401,21 @@ CALLBACK is the function to call after the request is done."
          (lambda (&rest _args) (when callback (funcall callback)))))
     (when callback (funcall callback))))
 
+(cl-defun jira-api-get-issue-types (&key force callback)
+  "Get the list of available issue types.
+
+FORCE will force the request even if the issue types are already stored.
+CALLBACK is the function to call after the request is done."
+  (if (or force (not jira-issue-types))
+      (let* ((fmt (lambda (s) (cons (alist-get 'name s) (alist-get 'id s)))))
+        (jira-api-call
+         "GET" "issuetype"
+         :callback
+         (lambda (data _response) (setq jira-issue-types (mapcar fmt data)))
+         :complete
+         (lambda (&rest _args) (when callback (funcall callback)))))
+    (when callback (funcall callback))))
+
 (cl-defun jira-api-get-projects (&key force callback)
   "Get the 10 most recent projects.
 
@@ -501,7 +518,8 @@ FORCE will force the request even if the data is already stored."
          (st (lambda () (jira-api-get-statuses :force force :callback fds)))
          (res (lambda () (jira-api-get-resolutions :force force :callback st)))
          (flt (lambda () (jira-api-get-filters :force force :callback res)))
-         (prj (lambda () (jira-api-get-projects :force force :callback flt)))
+         (types (lambda () (jira-api-get-issue-types :force force :callback flt)))
+         (prj (lambda () (jira-api-get-projects :force force :callback types)))
          (account (lambda () (jira-api-get-account-id :force force :callback prj))))
     (funcall account)))
 

@@ -195,7 +195,8 @@ PAGE-TOKEN is optional and used for pagination."
          (resolution (transient-arg-value "--resolution=" args))
          (version (transient-arg-value "--version=" args))
          (assignee (transient-arg-value "--assignee=" args))
-         (reporter (transient-arg-value "--reporter=" args)))
+         (reporter (transient-arg-value "--reporter=" args))
+         (issue-type (transient-arg-value "--type=" args)))
     (let ((additional-filters
            (list (when myself "assignee = currentUser()")
                  (when current-sprint "sprint in openSprints()")
@@ -203,6 +204,7 @@ PAGE-TOKEN is optional and used for pagination."
                  (when project (concat "project = \"" project "\""))
                  (when resolution (concat "resolution = \"" resolution "\""))
                  (when version (concat "fixversion = \"" version "\""))
+                 (when issue-type (concat "issuetype = \"" issue-type "\""))
                  (when assignee
                    (if (string-match-p "EMPTY" assignee)
                        "assignee = EMPTY"
@@ -274,7 +276,11 @@ PAGE-TOKEN is optional and used for pagination."
     ("v" "Fix Versions" "--version="
      :transient t
      :choices
-     (lambda () (apply #'append (mapcar #'cdr jira-projects-versions))))]
+     (lambda () (apply #'append (mapcar #'cdr jira-projects-versions))))
+    ("t" "Issue Type" "--type="
+     :transient t
+     :choices
+     (lambda () (mapcar #'car jira-issue-types)))]
    ["Arguments Help"
     ("C-x" :info (concat (jira-fmt-set-face "Check " 'italic)
                          "additional options"))
