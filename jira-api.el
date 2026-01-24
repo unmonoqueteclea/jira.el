@@ -408,10 +408,13 @@ FORCE will force the request even if the issue types are already stored.
 CALLBACK is the function to call after the request is done."
   (if (or force (not jira-issue-types))
       (let* ((fmt (lambda (s) (cons (alist-get 'name s) (alist-get 'id s)))))
-        (jira-api-call
+         (jira-api-call
          "GET" "issuetype"
          :callback
          (lambda (data _response) (setq jira-issue-types (mapcar fmt data)))
+         :error
+         (lambda (&rest args)
+           (message "Failed to fetch issue types: %S" args))
          :complete
          (lambda (&rest _args) (when callback (funcall callback)))))
     (when callback (funcall callback))))
