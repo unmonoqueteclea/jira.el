@@ -1,4 +1,7 @@
 # Changelog
+## 2.17.0 (2026-01-24)
+- Add issue type filter to transient menu
+
 ## 2.16.0 (2026-01-24)
 - Add interactive subtask section in detail view
 - ADF: Display and create action item lists
