@@ -1,4 +1,8 @@
 # Changelog
+## 2.16.0 (2026-01-24)
+- Add interactive subtask section in detail view
+- ADF: Display and create action item lists
+
 ## 2.15.0 (2025-12-08)
 - Expose `tabulated-list-sort-key`
 - Press `h` to open transient actions menu

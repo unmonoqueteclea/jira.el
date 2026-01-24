@@ -190,7 +190,7 @@ This is the list of customizations you can set:
   issue detail view.
 - `jira-use-color-marks`: If true, display color marks in Jira text.
   (default: `t`)
-  - `jira-detail-reuse-buffer`: If non-nil, reuse a single Jira detail buffer
+- `jira-detail-reuse-buffer`: If non-nil, reuse a single Jira detail buffer
   instead of creating separate buffers for each issue. When enabled, all issue
   details will be displayed in one buffer named "*Jira Issue Detail*" instead
   of creating separate buffers like "*Jira Issue Detail: [PROJ-123]*". (default: `nil`)
