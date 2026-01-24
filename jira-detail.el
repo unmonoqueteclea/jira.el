@@ -268,7 +268,11 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
   (concat
    (jira-fmt-bold (alist-get 'displayName (alist-get 'author comment)))
    " @ "
-   (jira-fmt-datetime (alist-get 'updated comment))))
+   (jira-fmt-datetime (alist-get 'updated comment))
+   (if (string= (alist-get 'updated comment)
+                (alist-get 'created comment))
+       ""
+     (jira-fmt-bold " (edited)"))))
 
 (defun jira-detail--comments (key comments)
   "Format and insert COMMENTS from issue KEY."
