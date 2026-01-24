@@ -515,6 +515,31 @@ CALLBACK is called with the watchers data."
 	  (message "No comment at point"))
       (message "No comment at point"))))
 
+(defun jira-detail--edit-comment-at-point ()
+  "Edit the comment at point."
+  (magit-section-case
+    (comment
+     (let ((comment-id (magit-section-ident-value (magit-current-section)))
+           (issue-key jira-detail--current-key))
+       (jira-edit-create-editor-buffer
+        (format "*Jira Comment Update %s: %s*" comment-id issue-key)
+        (let* ((fields (alist-get 'fields jira-detail--current))
+               (comment (alist-get 'comment fields))
+               (comments (alist-get 'comments comment))
+               (comment (seq-find (lambda (c)
+                                    (string= (alist-get 'id c)
+                                             comment-id))
+                                  comments)))
+          (if comment
+              (format "%S" (alist-get 'body comment))
+            (error "Comment %s not found in %s" issue-key)))
+        (lambda (content)
+          (jira-actions-edit-comment issue-key
+                                     comment-id
+                                     content
+                                     (lambda ()
+                                       (jira-detail-show-issue issue-key)))))))))
+
 (defun jira-detail--update-field-action (field-id value key)
   "Update FIELD-ID with VALUE for the current issue KEY."
   (jira-api-call
@@ -611,7 +636,9 @@ CALLBACK is called with the watchers data."
    ("+" "Add comment to issue"
     (lambda () (interactive ) (jira-detail--add-comment jira-detail--current-key)))
    ("-" "Remove comment at point"
-    (lambda () (interactive ) (jira-detail--remove-comment-at-point)))]
+    (lambda () (interactive ) (jira-detail--remove-comment-at-point)))
+   ("e" "Edit comment at point"
+    (lambda () (interactive) (jira-detail--edit-comment-at-point)))]
   ["Issue Actions"
    ("C" "Change issue status"
     (lambda () (interactive) (call-interactively #'jira-actions-change-issue-menu)))
@@ -642,6 +669,9 @@ CALLBACK is called with the watchers data."
     (define-key map (kbd "?") 'jira-detail--actions-menu)
     (define-key map (kbd "+")
 		(lambda () (interactive ) (jira-detail--add-comment jira-detail--current-key)))
+    (define-key map (kbd "e")
+                (lambda () "Edit comment at point"
+                  (interactive) (jira-detail--edit-comment-at-point)))
     (define-key map (kbd  "-")
 		(lambda () "Remove comment at point"
 		  (interactive) (jira-detail--remove-comment-at-point)))
