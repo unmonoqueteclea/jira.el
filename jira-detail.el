@@ -256,7 +256,9 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
   (let ((key jira-detail--current-key))
     (jira-edit-create-editor-buffer
      (concat "*Jira Description [" key "]*")
-     ""
+     (let* ((fields (alist-get 'fields jira-detail--current))
+            (description (alist-get 'description fields)))
+       (jira-doc-markup description))
      (lambda (new-description)
        (jira-detail--update-field-action
 	"description" (jira-doc-build new-description) key)))))
