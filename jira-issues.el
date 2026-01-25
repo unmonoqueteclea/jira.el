@@ -240,7 +240,6 @@ PAGE-TOKEN is optional and used for pagination."
   (jira-issues--reset-pagination)
   (jira-issues--fetch-and-display nil))
 
-
 (defun jira-issues--myself-inapt-p ()
   "Return t if assignee is set."
   (if transient-current-command
@@ -253,11 +252,9 @@ PAGE-TOKEN is optional and used for pagination."
       (let ((args (transient-args transient-current-command)))
 	(transient-arg-value "--myself" args))))
 
-
-
 (defun jira-issues--transient-default-value ()
   "Return default transient value including default issue type if set."
-  (let ((defaults '("--myself")))
+  (let ((defaults nil))
     (when jira-issues-default-type
       (push (concat "--type=" jira-issues-default-type) defaults))
     defaults))
@@ -274,7 +271,8 @@ PAGE-TOKEN is optional and used for pagination."
      (lambda () (when jira-users (cons "[EMPTY]" (hash-table-keys jira-users)))))
     ("m" "Just from myself" "--myself"
      :transient transient--do-call
-     :inapt-if jira-issues--myself-inapt-p)
+     :inapt-if jira-issues--myself-inapt-p
+     :init-value (lambda (obj) (oset obj value "--myself")))
     ("c" "Just from current sprint" "--current-sprint"
      :transient t)
     ("s" "Status" "--status="
