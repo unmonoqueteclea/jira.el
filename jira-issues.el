@@ -243,7 +243,6 @@ PAGE-TOKEN is optional and used for pagination."
 (transient-define-prefix jira-issues-menu ()
   "Show menu for listing Jira Issues."
   :refresh-suffixes t
-  :value '("--myself")
   [["Arguments"
     ("a" "Assignee" "--assignee="
      :transient transient--do-call
@@ -252,7 +251,8 @@ PAGE-TOKEN is optional and used for pagination."
      (lambda () (when jira-users (cons "[EMPTY]" (hash-table-keys jira-users)))))
     ("m" "Just from myself" "--myself"
      :transient transient--do-call
-     :inapt-if jira-issues--myself-inapt-p)
+     :inapt-if jira-issues--myself-inapt-p
+     :init-value (lambda (obj) (oset obj value "--myself")))
     ("c" "Just from current sprint" "--current-sprint"
      :transient t)
     ("s" "Status" "--status="
