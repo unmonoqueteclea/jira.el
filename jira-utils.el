@@ -153,7 +153,10 @@
     (:issuelinks . ((:path . (fields issuelinks))
                    (:columns . 15)
                    (:name . "Linked Issues")
-                   (:formatter . jira-fmt-issuelinks)))))
+                   (:formatter . jira-fmt-issuelinks)))
+    (:issue-type-subtask . ((:path . (fields issuetype subtask))
+                            (:columns . 5)
+                            (:name . "Subtask?")))))
 
 (defun jira-utils-marked-items ()
   "Return the marked items in the current tablist."
