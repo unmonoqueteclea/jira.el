@@ -486,17 +486,37 @@ BLOCK is the media node to format."
       (format ";; %s node was here" type))
      (t content))))
 
+(defun jira-doc--markup-list (block)
+  "Format BLOCK, an orderedList or bulletList, with markup."
+  (let ((jira-doc--markup-list-prefix
+         (concat jira-doc--markup-list-prefix
+                 (if (string= (alist-get 'type block)
+                              "orderedList")
+                     "#"
+                   "*"))))
+    (jira-doc--list-to-str
+     ;; An intermediate list-item with a blank body and a nested list
+     ;; child should not be translated into markup; it just makes the
+     ;; result more complicated.
+     (mapcar (lambda (x)
+               (jira-doc--markup-block
+                (or (pcase x
+                      ((map ('type "listItem")
+                            content)
+                       (pcase content
+                         (`[((type . "paragraph"))
+                            ,child]
+                          child))))
+                    x)))
+             (alist-get 'content block))
+     "\n")))
+
 (defun jira-doc--markup-block (block)
   "Format BLOCK to a string with markup."
   (let ((type (alist-get 'type block)))
-    (cond ((string= type "orderedList")
-           (let ((jira-doc--markup-list-prefix
-                  (concat jira-doc--markup-list-prefix "#")))
-             (jira-doc--markup-content-block block)))
-          ((string= type "bulletList")
-           (let ((jira-doc--markup-list-prefix
-                  (concat jira-doc--markup-list-prefix "*")))
-             (jira-doc--markup-content-block block)))
+    (cond ((or (string= type "orderedList")
+               (string= type "bulletList"))
+           (jira-doc--markup-list block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--markup-content-block block))
