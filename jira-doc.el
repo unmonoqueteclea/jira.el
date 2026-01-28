@@ -214,15 +214,19 @@ BLOCK is the media node to format."
   (mapcar #'jira-doc--format-content-block
           (alist-get 'content block)))
 
+(defun jira-doc--table-header (block)
+  "Find the header row of BLOCK, a table node."
+  (seq-find (lambda (r)
+              (seq-every-p (lambda (c)
+                             (string= "tableHeader"
+                                      (alist-get 'type c)))
+                           (alist-get 'content r)))
+            (alist-get 'content block)))
+
 (defun jira-doc--format-table (block)
   "Format BLOCK, a table node, as a string."
   (let* ((rows (alist-get 'content block))
-         (header (seq-find (lambda (r)
-                             (seq-every-p (lambda (c)
-                                            (string= "tableHeader"
-                                                     (alist-get 'type c)))
-                                          (alist-get 'content r)))
-                           rows))
+         (header (jira-doc--table-header block))
          (body (remove header rows))
          (header (jira-doc--format-table-row header))
          (body (mapcar #'jira-doc--format-table-row body))
@@ -350,7 +354,7 @@ BLOCK is the media node to format."
   (cond ((alist-get 'link marks)
          (let ((url (alist-get 'link marks)))
            (format "[%s|%s]" text url)))
-        ((alist-get 'code marks)
+        ((memq 'code marks)
          (format "`%s`" text))
         (t
          (let ((res text))
@@ -427,21 +431,14 @@ BLOCK is the media node to format."
 (defun jira-doc--markup-table (block)
   "Format BLOCK, a table node, as a string."
   (let* ((rows (alist-get 'content block))
-         (header (seq-find (lambda (r)
-                             (seq-every-p (lambda (c)
-                                            (string= "tableHeader"
-                                                     (alist-get 'type c)))
-                                          (alist-get 'content r)))
-                           rows))
-         (body (mapcar (lambda (r)
-                         (jira-doc--markup-table-row r "|"))
-                       (remove header rows)))
-         (header (if header
-                     (jira-doc--markup-table-row header "||")
-                   nil)))
-    (string-join (if header
-                     (cons header body)
-                   body)
+         (header (jira-doc--table-header block)))
+    (string-join (mapcar (lambda (r)
+                           (jira-doc--markup-table-row
+                            r
+                            (if (eq r header)
+                                "||"
+                              "|")))
+                         rows)
                  "\n")))
 
 (defun jira-doc--markup-task-list (block)
@@ -471,7 +468,7 @@ BLOCK is the media node to format."
      ((string= type "table")
       (jira-doc--markup-table block))
      ((string= type "codeBlock")
-      (concat "\n" "{code}\n" content "{code}\n" "\n"))
+      (concat "{code}\n" content "\n{code}\n"))
      ((string= type "blockquote")
       (concat "bq. " content))
      ((string= type "heading")

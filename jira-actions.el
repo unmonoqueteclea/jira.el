@@ -185,7 +185,7 @@ It will include the given TEXT and run the CALLBACK at the end."
    "PUT" (concat "issue/" issue-key "/comment/" comment-id)
    :data `(("body" . ,(jira-doc-build text)))
    :callback (lambda (_data _response)
-               (message "Comment added to %s" issue-key)
+               (message "Comment %s updated on %s" comment-id issue-key)
 	       (funcall callback))))
 
 (defun jira-actions-delete-comment (issue-key comment-id callback)
