@@ -54,7 +54,15 @@
      0 'font-lock-builtin-face prepend)))
 
 (defconst jira-regexp-link
-  (rx "[" (submatch (*? (not "]"))) "]"))
+  (rx "["
+      (submatch
+       ;; title
+       (? (+? any) "|")
+       ;; scheme
+       alpha (*? (or alpha digit "+" "-" "."))
+       "://"
+       (*? (not "]")))
+      "]"))
 
 (defconst jira-regexp-code
   (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
