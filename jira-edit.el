@@ -69,12 +69,20 @@
 (defconst jira-regexp-task-item
   (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
 
+(defconst jira-regexp-toplevel-adf
+  (rx bow "{" (+ alpha) ":" (submatch (+? any)) "}" eow))
+(defconst jira-regexp-inline-adf
+  (rx bow "{ " (+ alpha) ":" (submatch (+? any)) "}" eow))
+
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
     (,jira-regexp-code . 'jira-face-code)
     (,jira-regexp-link . 'jira-face-link)
     (,jira-regexp-task-item 1 font-lock-builtin-face)
-    (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
+    (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
+    (,jira-regexp-inline-adf
+     (0 '(face jira-face-placeholder read-only t))
+     (1 '(face jira-face-placeholder invisible t)))))
 
 (defconst jira-regexp-blockquote
   (rx bol "bq. " (submatch (+ not-newline))))
@@ -111,6 +119,9 @@
      1 font-lock-builtin-face)
     (,jira-regexp-table-row
      . 'jira-face-code)
+    (,jira-regexp-toplevel-adf
+     (0 '(face jira-face-placeholder read-only t))
+     (1 '(face jira-face-placeholder invisible t)))
     ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
@@ -224,11 +235,17 @@
 (define-derived-mode jira-edit-mode text-mode
   "Jira Edit"
   "Major mode for writing Jira comments, descriptions etc."
-  (setq font-lock-defaults '(jira-font-lock-keywords))
+  (setq font-lock-defaults '(jira-font-lock-keywords
+                             nil
+                             nil
+                             nil
+                             (font-lock-extra-managed-props
+                              invisible read-only)))
   (setq-local font-lock-multiline t)
   (add-hook 'font-lock-extend-region-functions
             #'jira-edit-font-lock-extend-region)
   (set-syntax-table (let ((st (make-syntax-table)))
+                      (modify-syntax-entry ?\" "w" st)
                       (modify-syntax-entry ?+ "w" st)
                       (modify-syntax-entry ?* "w" st)
                       (modify-syntax-entry ?: "w" st)

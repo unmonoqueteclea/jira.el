@@ -392,16 +392,14 @@ BLOCK is the media node to format."
             (string-join (mapcar #'jira-doc--markup-inline-block
                                  (alist-get 'content block))))))
 
-(defvar-local jira-doc--warn-unsupported t)
-
 (defun jira-doc--markup-unsupported (block)
-  "Warn about BLOCK which cannot be converted to markup."
-  (when jira-doc--warn-unsupported
-    (if (y-or-n-p "Jira Doc: the document you are editing contains elements which cannot be represented in markup. Proceed?")
-        (setq jira-doc--warn-unsupported nil)
-      (keyboard-quit)))
-  (message "[Jira Doc Error]: %s node not supported in markup; it will be lost!"
-           (alist-get 'type block)))
+  "Format BLOCK so that it will be passed literally through markup."
+  (let ((toplevel-p (not (member (alist-get 'type block)
+                                 jira-doc--inline-blocks))))
+    (format "{%s%s:%S}"
+            (if toplevel-p "" " ")
+            (alist-get 'type block)
+            block)))
 
 (defun jira-doc--markup-inline-block (block)
   "Format inline BLOCK to a string with markup."
@@ -417,8 +415,7 @@ BLOCK is the media node to format."
           (text (let ((marks (jira-doc--marks block)))
                   (jira-doc--markup-with-marks text marks)))
           (t
-           (jira-doc--markup-unsupported block)
-           ""))))
+           (jira-doc--markup-unsupported block)))))
 
 (defun jira-doc--markup-table-row (block delimiter)
   "Format BLOCK, a tableRow node, as a string."
@@ -477,11 +474,10 @@ BLOCK is the media node to format."
               content))
      ((string= type "taskList")
       (jira-doc--markup-task-list block))
-     ((and (null (alist-get 'content block))
-           (not (string= type "paragraph")))
-      (jira-doc--markup-unsupported block)
-      (format ";; %s node was here" type))
-     (t content))))
+     ((member type '("paragraph" "listItem" "tableCell" "tableHeader" "taskItem"))
+      content)
+     (t
+      (jira-doc--markup-unsupported block)))))
 
 (defun jira-doc--markup-list (block)
   "Format BLOCK, an orderedList or bulletList, with markup."
@@ -522,7 +518,6 @@ BLOCK is the media node to format."
 
 (defun jira-doc-markup (doc)
   "Format DOC with markup for `jira-edit-mode'."
-  (setq jira-doc--warn-unsupported t)
   (let ((content (alist-get 'content doc)))
     (jira-doc--list-to-str
      (mapcar #'jira-doc--markup-block content)
@@ -663,6 +658,9 @@ NAME is the emoji name."
     ("attrs" .
      (("shortName" . ,name)))))
 
+(defun jira-doc--build-inline-adf (block-str)
+  (read block-str))
+
 (defun jira-doc--build-code-block (body)
   "Make an ADF codeBlock node.
 BODY is the code block content."
@@ -763,6 +761,9 @@ like other marks, so it's easier to pretend they're blocks."
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
     (setq blocks (jira-doc-build-task-lists blocks))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-inline-adf
+                                  #'jira-doc--build-inline-adf))
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
@@ -929,11 +930,12 @@ like other marks, so it's easier to pretend they're blocks."
   (let ((blocks
 	 (thread-first
 	   (list text)
-	   (jira-doc--split jira-regexp-code-block  #'jira-doc--build-code-block)
+	   (jira-doc--split jira-regexp-code-block   #'jira-doc--build-code-block)
+           (jira-doc--split jira-regexp-toplevel-adf #'jira-doc--build-inline-adf)
            jira-doc--split-paragraphs
-	   (jira-doc--split jira-regexp-blockquote  #'jira-doc--build-blockquote)
-	   (jira-doc--split jira-regexp-heading     #'jira-doc--build-heading)
-	   (jira-doc--split jira-regexp-hr          #'jira-doc--build-rule)
+	   (jira-doc--split jira-regexp-blockquote   #'jira-doc--build-blockquote)
+	   (jira-doc--split jira-regexp-heading      #'jira-doc--build-heading)
+	   (jira-doc--split jira-regexp-hr           #'jira-doc--build-rule)
 	   (jira-doc-build-tables)
 	   (jira-doc-build-lists))))
     (mapcar (lambda (s)
