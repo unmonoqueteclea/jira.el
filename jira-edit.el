@@ -85,7 +85,12 @@
      (1 '(face jira-face-placeholder invisible t)))))
 
 (defconst jira-regexp-blockquote
-  (rx bol "bq. " (submatch (+ not-newline))))
+  (rx bol
+      "bq. "
+      (submatch (+ not-newline)
+                (* (or "\r" "\n" "\r\n")
+                   (+ not-newline)))
+      eol))
 
 (defconst jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
