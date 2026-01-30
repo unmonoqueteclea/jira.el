@@ -519,12 +519,25 @@ BLOCK is the media node to format."
           (t
            (jira-doc--markup-inline-block block)))))
 
-(defun jira-doc-markup (doc)
-  "Format DOC with markup for `jira-edit-mode'."
+(defun jira-doc-markup-adf (doc)
+  "Format DOC, an ADF tree, to a string with markup."
   (let ((content (alist-get 'content doc)))
     (jira-doc--list-to-str
      (mapcar #'jira-doc--markup-block content)
      "\n\n")))
+
+;;;; Markup for v2 comment bodies. Our markup was designed to be a
+;;;; subset of what v2 expects, so this is much easier than converting
+;;;; ADF.
+(defun jira-doc-markup-v2 (text)
+  "Convert v2 markup into `jira-edit-mode' markup."
+  text)
+
+(defun jira-doc-markup (doc)
+  "Format DOC with markup for `jira-edit-mode'."
+  (if (stringp doc)
+      (jira-doc-markup-v2 doc)
+    (jira-doc-markup-adf doc)))
 
 
 ;; Building ADF from Jira-style markdown.
