@@ -77,6 +77,9 @@
 (defconst jira-regexp-task-item
   (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
 
+(defconst jira-regexp-hard-break
+  (rx "//"))
+
 (defconst jira-regexp-toplevel-adf
   (rx bow "{" (+ alpha) ":" (submatch (+? any)) "}" eow))
 (defconst jira-regexp-inline-adf
@@ -90,7 +93,8 @@
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
     (,jira-regexp-inline-adf
      (0 '(face jira-face-placeholder read-only t))
-     (1 '(face jira-face-placeholder invisible t)))))
+     (1 '(face jira-face-placeholder invisible t)))
+    (,jira-regexp-hard-break . font-lock-builtin-face)))
 
 (defconst jira-regexp-blockquote
   (rx bol
@@ -201,6 +205,7 @@
 ;; bq. blockquote
 ;; h1-6. header
 ;; ---- horizontal rule
+;; // hard break
 
 ;; Bullet lists:
 ;; * a

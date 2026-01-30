@@ -405,7 +405,8 @@ BLOCK is the media node to format."
   "Format inline BLOCK to a string with markup."
   (let ((type (alist-get 'type block))
         (text (alist-get 'text block)))
-    (cond ((string= type "hardBreak") "\n")
+    (cond ((string= type "hardBreak")
+           "//\n")
           ((string= type "mention")
            (jira-doc--markup-mention block))
           ((string= type "emoji")
@@ -694,6 +695,10 @@ HEADING-TEXT is the heading text."
   "Make an ADF rule node (horizontal rule)."
   `(("type" . "rule")))
 
+(defun jira-doc--build-hard-break ()
+  "Make an ADF hardBreak node."
+  `(("type" . "hardBreak")))
+
 (defun jira-doc--build-list-item (&rest children)
   "Make an ADF listItem node.
 CHILDREN are the list item contents."
@@ -778,6 +783,13 @@ like other marks, so it's easier to pretend they're blocks."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-emoji
                                   #'jira-doc--build-emoji))
+    (setq blocks (jira-doc--split blocks
+                                  ;; remove the newline added for
+                                  ;; readability in
+                                  ;; `jira-doc--markup-inline-block'
+                                  (rx (regexp jira-regexp-hard-break)
+                                      (* space))
+                                  #'jira-doc--build-hard-break))
     (mapcan (lambda (s)
               (if (stringp s)
                   (jira-doc--build-marked-text s)
