@@ -468,6 +468,8 @@ BLOCK is the media node to format."
       (concat "{code}\n" content "\n{code}\n"))
      ((string= type "blockquote")
       (concat "bq. " content))
+     ((string= type "rule")
+      "----")
      ((string= type "heading")
       (format "h%d. %s"
               (alist-get 'level attrs)

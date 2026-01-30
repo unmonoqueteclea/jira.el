@@ -148,7 +148,9 @@
     (,(rx bol "h5. " (*? not-newline) eol)
      . 'jira-face-h5)
     (,(rx bol "h6. " (*? not-newline) eol)
-     . 'jira-face-h6)))
+     . 'jira-face-h6)
+    (,jira-regexp-hr
+     . font-lock-builtin-face)))
 
 (defconst jira-regexp-comment-instruction
   (rx bol (+ ";") (+? not-newline) eol))
