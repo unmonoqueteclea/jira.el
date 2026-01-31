@@ -52,21 +52,45 @@
       (submatch (*? any))
       "{color}"))
 
+(defun jira-edit--markable-p (point)
+  "Return t if POINT is at a place where text marks may apply."
+  (let ((face (get-text-property point 'face)))
+    (if (consp face)
+        (and (not (memq 'jira-face-code face))
+             (not (memq 'jira-face-link face)))
+      (and (not (eq 'jira-face-code face))
+           (not (eq 'jira-face-link face))))))
+
+(defun jira-edit--mark-matcher (regexp)
+  "Return a function which searches for markup matching REGEXP."
+  #'(lambda (limit)
+      (let (matched)
+        (while (and (< (point) limit)
+                    (not matched))
+          (if (re-search-forward regexp limit t)
+              (setq matched
+                    (and (jira-edit--markable-p (match-beginning 0))
+                         (jira-edit--markable-p (match-end 0))))
+            (goto-char limit)))
+        matched)))
+
 (defvar jira-mark-keywords
-  `(("\\_<\\*[^*\r\n]+?\\*\\_>"
-     0 'bold prepend)
-    ("\\_<_[^_\r\n]+?_\\_>"
-     0 'italic prepend)
-    ("\\_<-[^-\r\n]+?-\\_>"
-     0 'jira-face-deleted prepend)
-    ("\\_<\\+[^\\r\n+]+?\\+\\_>"
-     0 'jira-face-inserted prepend)
+  `((,(jira-edit--mark-matcher "\\*[^*[:space:]][^\r\n]*?\\*")
+     0 'bold append)
+    ;; unlike other marks, deleted checks for word boundaries to avoid
+    ;; false positives on hyphenated words: like-so and then like-this.
+    (,(jira-edit--mark-matcher "\\<-[^-[:space:]][^\r\n]+?-\\>")
+     0 'jira-face-deleted append)
+    (,(jira-edit--mark-matcher "_[^\r\n]+?_")
+     0 'italic append)
+    (,(jira-edit--mark-matcher "\\+[^\r\n]+?\\+")
+     0 'jira-face-inserted append)
     ;; can't display subscript or superscript: AFAICT font-lock
     ;; shouldn't manage the 'display text property.
-    ("\\_<\\^[^\r\n^]+?\\^\\_>"
-     0 'font-lock-builtin-face prepend)
-    ("\\_<~[^~\r\n]+?~\\_>"
-     0 'font-lock-builtin-face prepend)
+    (,(jira-edit--mark-matcher "\\^[^\r\n]+?\\^")
+     0 'font-lock-builtin-face append)
+    (,(jira-edit--mark-matcher "~[^\r\n]+?~")
+     0 'font-lock-builtin-face append)
     (,jira-regexp-color-tag
      0 'font-lock-builtin-face append)))
 
@@ -101,8 +125,8 @@
 
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
-    (,jira-regexp-code 0 'jira-face-code prepend)
-    (,jira-regexp-link . 'jira-face-link)
+    (,jira-regexp-code 0 'jira-face-code t)
+    (,jira-regexp-link 0 'jira-face-link t)
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
     (,jira-regexp-inline-adf

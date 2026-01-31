@@ -618,7 +618,7 @@ which do not match are returned as-is."
 
 (defun jira-doc--build-marked-text (text)
   "Split TEXT into a list of ADF text nodes with marks."
-  (let* ((mark-regexp (concat "\\_<\\("
+  (let* ((mark-regexp (concat "\\("
                               (string-join (mapcar (lambda (d)
                                                        (let ((delim (regexp-quote (car d))))
                                                          (concat delim "[^" delim "]+?" delim)))
@@ -627,7 +627,7 @@ which do not match are returned as-is."
                               ;; don't use `jira-regexp-color' here
                               ;; because we don't want the submatches.
                               "\\|{color:.+?}.*?{color}"
-                              "\\)\\_>"))
+                              "\\)"))
          (areas (jira-doc--split (list (string-trim text))
                                  "\n"
                                   #'jira-doc--build-hard-break))
