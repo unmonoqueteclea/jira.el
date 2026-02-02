@@ -81,9 +81,9 @@
   (rx "//"))
 
 (defconst jira-regexp-toplevel-adf
-  (rx bow "{" (+ alpha) ":" (submatch (+? any)) "}" eow))
+  (rx "{ADF:" (+ alpha) ":" (submatch (+? any)) "}"))
 (defconst jira-regexp-inline-adf
-  (rx bow "{ " (+ alpha) ":" (submatch (+? any)) "}" eow))
+  (rx "{ADF: " (+ alpha) ":" (submatch (+? any)) "}"))
 
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
@@ -92,8 +92,8 @@
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
     (,jira-regexp-inline-adf
-     (0 '(face jira-face-placeholder read-only t))
-     (1 '(face jira-face-placeholder invisible t)))
+     (0 '(face jira-face-placeholder))
+     (1 '(face jira-face-placeholder invisible jira-inline-adf)))
     (,jira-regexp-hard-break . font-lock-builtin-face)))
 
 (defconst jira-regexp-blockquote
@@ -136,8 +136,8 @@
     (,jira-regexp-table-row
      . 'jira-face-code)
     (,jira-regexp-toplevel-adf
-     (0 '(face jira-face-placeholder read-only t))
-     (1 '(face jira-face-placeholder invisible t)))
+     (0 '(face jira-face-placeholder))
+     (1 '(face jira-face-placeholder invisible jira-inline-adf)))
     ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
@@ -259,7 +259,8 @@
                              nil
                              nil
                              (font-lock-extra-managed-props
-                              invisible read-only)))
+                              invisible)))
+  (add-to-invisibility-spec '(jira-inline-adf . t))
   (setq-local font-lock-multiline t)
   (add-hook 'font-lock-extend-region-functions
             #'jira-edit-font-lock-extend-region)
@@ -270,8 +271,6 @@
                       (modify-syntax-entry ?: "w" st)
                       (modify-syntax-entry ?_ "w" st)
                       (modify-syntax-entry ?- "w" st)
-                      (modify-syntax-entry ?{ "w" st)
-                      (modify-syntax-entry ?} "w" st)
                       st))
   (set-buffer-modified-p nil))
 

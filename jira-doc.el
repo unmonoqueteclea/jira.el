@@ -396,7 +396,7 @@ BLOCK is the media node to format."
   "Format BLOCK so that it will be passed literally through markup."
   (let ((toplevel-p (not (member (alist-get 'type block)
                                  jira-doc--inline-blocks))))
-    (format "{%s%s:%S}"
+    (format "{ADF:%s%s:%S}"
             (if toplevel-p "" " ")
             (alist-get 'type block)
             block)))
