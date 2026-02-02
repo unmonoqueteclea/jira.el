@@ -406,7 +406,7 @@ BLOCK is the media node to format."
   (let ((type (alist-get 'type block))
         (text (alist-get 'text block)))
     (cond ((string= type "hardBreak")
-           "//\n")
+           "\n")
           ((string= type "mention")
            (jira-doc--markup-mention block))
           ((string= type "emoji")
@@ -613,7 +613,10 @@ which do not match are returned as-is."
                                                    jira-doc--marks-delimiters)
                                            "\\|")
                               "\\)\\_>"))
-         (areas (jira-doc--split (list text)
+         (areas (jira-doc--split (list (string-trim text))
+                                 "\n"
+                                  #'jira-doc--build-hard-break))
+         (areas (jira-doc--split areas
                                  mark-regexp
                                  (lambda (s)
                                      (pcase (jira-doc--collect-marks s)
@@ -801,13 +804,6 @@ like other marks, so it's easier to pretend they're blocks."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-emoji
                                   #'jira-doc--build-emoji))
-    (setq blocks (jira-doc--split blocks
-                                  ;; remove the newline added for
-                                  ;; readability in
-                                  ;; `jira-doc--markup-inline-block'
-                                  (rx (regexp jira-regexp-hard-break)
-                                      (* space))
-                                  #'jira-doc--build-hard-break))
     (mapcan (lambda (s)
               (if (stringp s)
                   (jira-doc--build-marked-text s)
