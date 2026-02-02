@@ -87,7 +87,7 @@
 
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
-    (,jira-regexp-code . 'jira-face-code)
+    (,jira-regexp-code 0 'jira-face-code prepend)
     (,jira-regexp-link . 'jira-face-link)
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
@@ -101,8 +101,7 @@
       "bq. "
       (submatch (+ not-newline)
                 (* (or "\r" "\n" "\r\n")
-                   (+ not-newline)))
-      eol))
+                   (+ not-newline)))))
 
 (defconst jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
@@ -133,7 +132,7 @@
   `((,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
-     1 font-lock-builtin-face)
+     1 font-lock-builtin-face prepend)
     (,jira-regexp-table-row
      . 'jira-face-code)
     (,jira-regexp-toplevel-adf

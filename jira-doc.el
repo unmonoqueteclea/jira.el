@@ -452,7 +452,10 @@ BLOCK is the media node to format."
   "Format content BLOCK to a string with markup."
   (let* ((type (alist-get 'type block))
 	 (attrs (alist-get 'attrs block))
-         (sep (if (string= type "paragraph") "" "\n"))
+         (sep (if (or (string= type "paragraph")
+                      (string= type "blockquote"))
+                  ""
+                "\n"))
          (prefix (if (string= type "listItem")
                      (concat jira-doc--markup-list-prefix " ")
                    ""))
@@ -689,9 +692,11 @@ BODY is the code block content."
 QUOTED-TEXT is the text to quote."
   `(("type" . "blockquote")
     ("content"
-     (("type" . "paragraph")
-      ("content"
-       ,@(jira-doc-build-inline-blocks quoted-text))))))
+     ;; Only paragraphs and lists are allowed inside blockquotes.
+     ;; Marks are also allowed, even though the ADF documentation says
+     ;; they aren't.
+     ,@(let ((blocks (jira-doc-build-lists (list quoted-text))))
+         (mapcan #'jira-doc-build-inline-blocks blocks)))))
 
 (defun jira-doc--build-heading (heading-text)
   "Make an ADF heading node.
