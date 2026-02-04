@@ -37,6 +37,21 @@
 (defvar-local jira-edit--callback nil
   "The callback function to call after adding a comment.")
 
+(defconst jira-regexp-color-tag
+  (rx "{color"
+      (? ":"
+         (or (+ alpha)
+             (seq "#" (+ hex))))
+      "}"))
+
+(defconst jira-regexp-color
+  (rx "{color:"
+      (submatch (or (+ alpha)
+                    (seq "#" (+ hex))))
+      "}"
+      (submatch (*? any))
+      "{color}"))
+
 (defvar jira-mark-keywords
   `(("\\_<\\*[^*\r\n]+?\\*\\_>"
      0 'bold prepend)
@@ -48,10 +63,12 @@
      0 'jira-face-inserted prepend)
     ;; can't display subscript or superscript: AFAICT font-lock
     ;; shouldn't manage the 'display text property.
-    ("\\_<\\\^[^\\r\n^]+?\\\^\\_>"
+    ("\\_<\\^[^\r\n^]+?\\^\\_>"
      0 'font-lock-builtin-face prepend)
     ("\\_<~[^~\r\n]+?~\\_>"
-     0 'font-lock-builtin-face prepend)))
+     0 'font-lock-builtin-face prepend)
+    (,jira-regexp-color-tag
+     0 'font-lock-builtin-face append)))
 
 (defconst jira-regexp-link
   (rx "["
@@ -238,13 +255,35 @@
     (`(,name ,_id)
      (insert "[~" name "]"))))
 
+(defun jira-edit-make-color (text color)
+  (concat (format "{color:%s}" color)
+          text
+          "{color}"))
+
+(defun jira-edit-insert-color (color)
+  "Prompt for a color value, then insert color tags at point.
+
+If the region is active, the tags are inserted around it"
+  (interactive
+   (list (read-color)))
+  (cond ((use-region-p)
+         (let ((text (buffer-substring (region-beginning)
+                                       (region-end))))
+           (delete-region (region-beginning) (region-end))
+           (insert (jira-edit-make-color text color))))
+        (t
+         (insert (jira-edit-make-color "" color))
+         ;; leave point inside the color tags
+         (backward-sexp 1))))
+
 (defvar-keymap jira-edit-mode-map
   "C-c C-c" (lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
                 (funcall jira-edit--callback))
   "C-c C-k" 'kill-buffer
-  "C-c m"   'jira-edit-insert-mention)
+  "C-c m"   'jira-edit-insert-mention
+  "C-c c"   'jira-edit-insert-color)
 
 (define-derived-mode jira-edit-mode text-mode
   "Jira Edit"

@@ -363,8 +363,12 @@ BLOCK is the media node to format."
                (`(,_kind ,char)
                  (setq res (concat char res char)))
                (_
-                (message "[Jira Doc Error]: discarding unsupported mark '%s'"
-                         m))))
+                (pcase m
+                  (`(color . ,hue)
+                   (setq res (jira-edit-make-color res hue)))
+                  (_
+                   (message "[Jira Doc Error]: discarding unsupported mark '%s'"
+                            m))))))
            res))))
 
 (defun jira-doc--markup-mention (block)
@@ -564,6 +568,14 @@ Return un-marked text and a list of applicable marks."
                                         (length delim)))
                      marks (cons type marks)
                      any-matched t)))))
+        (when (string-match (rx bos (regexp jira-regexp-color) eos)
+                            text)
+          (push `(("type" . "textColor")
+                  ("attrs"
+                   ("color" . ,(match-string 1 text))))
+                marks)
+          (setq text (match-string 2 text)
+                any-matched t))
         (unless any-matched
           (setq done t))))
     (cl-values text marks)))
@@ -612,6 +624,9 @@ which do not match are returned as-is."
                                                          (concat delim "[^" delim "]+?" delim)))
                                                    jira-doc--marks-delimiters)
                                            "\\|")
+                              ;; don't use `jira-regexp-color' here
+                              ;; because we don't want the submatches.
+                              "\\|{color:.+?}.*?{color}"
                               "\\)\\_>"))
          (areas (jira-doc--split (list (string-trim text))
                                  "\n"
