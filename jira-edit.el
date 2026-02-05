@@ -55,11 +55,12 @@
 (defun jira-edit--markable-p (point)
   "Return t if POINT is at a place where text marks may apply."
   (let ((face (get-text-property point 'face)))
-    (if (consp face)
-        (and (not (memq 'jira-face-code face))
-             (not (memq 'jira-face-link face)))
-      (and (not (eq 'jira-face-code face))
-           (not (eq 'jira-face-link face))))))
+    (and (not (eq (char-before point) ?\\))
+         (if (consp face)
+             (and (not (memq 'jira-face-code face))
+                  (not (memq 'jira-face-link face)))
+           (and (not (eq 'jira-face-code face))
+                (not (eq 'jira-face-link face)))))))
 
 (defun jira-edit--mark-matcher (regexp)
   "Return a function which searches for markup matching REGEXP."
@@ -75,21 +76,27 @@
         matched)))
 
 (defvar jira-mark-keywords
-  `((,(jira-edit--mark-matcher "\\*[^*[:space:]][^\r\n]*?\\*")
+  `((,(jira-edit--mark-matcher
+       (rx "*" (not (or "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
      0 'bold append)
     ;; unlike other marks, deleted checks for word boundaries to avoid
     ;; false positives on hyphenated words: like-so and then like-this.
-    (,(jira-edit--mark-matcher "\\<-[^-[:space:]][^\r\n]+?-\\>")
+    (,(jira-edit--mark-matcher
+       (rx bow "-" (not (or "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
      0 'jira-face-deleted append)
-    (,(jira-edit--mark-matcher "_[^\r\n]+?_")
+    (,(jira-edit--mark-matcher
+       (rx "_" (+? (or "\\_" (not (or "\r" "\n")))) "_"))
      0 'italic append)
-    (,(jira-edit--mark-matcher "\\+[^\r\n]+?\\+")
+    (,(jira-edit--mark-matcher
+       (rx "+" (+? (or "\\+" (not (or "\r" "\n")))) "+"))
      0 'jira-face-inserted append)
     ;; can't display subscript or superscript: AFAICT font-lock
     ;; shouldn't manage the 'display text property.
-    (,(jira-edit--mark-matcher "\\^[^\r\n]+?\\^")
+    (,(jira-edit--mark-matcher
+       (rx "^" (+? (or "\\^" (not (or "\r" "\n")))) "^"))
      0 'font-lock-builtin-face append)
-    (,(jira-edit--mark-matcher "~[^\r\n]+?~")
+    (,(jira-edit--mark-matcher
+       (rx "~" (+? (or "\\~" (not (or "\r" "\n")))) "~"))
      0 'font-lock-builtin-face append)
     (,jira-regexp-color-tag
      0 'font-lock-builtin-face append)))
@@ -106,8 +113,8 @@
       "]"))
 
 (defconst jira-regexp-code
-  (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
-          (seq "{{" (submatch-n 1 (*? (not "}"))) "}}"))))
+  (rx (or (seq "`" (submatch-n 1 (*? (or "\\`" (not "`")))) "`")
+          (seq "{{" (submatch-n 1 (*? (or "\\}" (not "}")))) "}}"))))
 
 (defconst jira-regexp-mention
   (rx "[~" (submatch (*? (not "]"))) "]"))
@@ -165,8 +172,13 @@
       (submatch (+? not-newline))
       eol))
 
+(defconst jira-regexp-code-block
+  (rx bol "{code}" (submatch (*? anychar)) "{code}" (*? whitespace) eol))
+
 (defvar jira-block-keywords
-  `((,jira-regexp-blockquote
+  `((,jira-regexp-code-block
+     . 'jira-face-code)
+    (,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
      1 font-lock-builtin-face prepend)
@@ -195,8 +207,9 @@
 (defconst jira-regexp-comment-instruction
   (rx bol (+ ";") (+? not-newline) eol))
 
-(defconst jira-regexp-code-block
-  (rx bol "{code}" (submatch (*? anychar)) "{code}" (*? whitespace) eol))
+(defconst jira-regexp-char-escape
+  (rx (or (seq bol "\\" (submatch-n 1 (or "h" "b")))
+          (seq "\\" (submatch-n 1 punct)))))
 
 ;; Implementation taken from https://stackoverflow.com/questions/9452615/emacs-is-there-a-clear-example-of-multi-line-font-locking
 (defun jira-edit-font-lock-extend-region ()
@@ -212,9 +225,10 @@
       (setq font-lock-beg found))))
 
 (defvar jira-font-lock-keywords
-  (append `((,jira-regexp-comment-instruction
+  (append `((,jira-regexp-char-escape
+             0 font-lock-constant-face)
+            (,jira-regexp-comment-instruction
              0 font-lock-comment-face prepend))
-          `((,jira-regexp-code-block . 'jira-face-code))
           jira-block-keywords
           jira-inline-block-keywords
           jira-mark-keywords))
@@ -234,6 +248,8 @@
 ;; ^superscript^
 ;; ~subscript~
 ;; `code`
+
+;; \ escapes the next markup character
 
 ;; [title|link]
 ;; :emoji:

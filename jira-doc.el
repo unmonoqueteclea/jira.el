@@ -599,19 +599,26 @@ transformed by calling F with the submatches as arguments. Substrings
 which do not match are returned as-is."
   (mapcan (lambda (s)
             (if (stringp s)
-                (let ((i 0)
+                (let ((search-start 0)
+                      (last-end 0)
                       (subs '()))
-                  (while (and (< i (length s))
-                              (string-match regexp s i))
-                    (unless (= i (match-beginning 0))
-                      (push (substring s i (match-beginning 0))
-                            subs))
-                    (save-match-data
-                      (push (apply f (jira-doc--submatches s))
-                            subs))
-                    (setq i (match-end 0)))
-                  (unless (= i (length s))
-                    (push (substring s i) subs))
+                  (while (and (< search-start (length s))
+                              (string-match regexp s search-start))
+                    ;; if the match begins with an escaped character,
+                    ;; it doesn't count.
+                    (unless (and (> (match-beginning 0) 0)
+                                 (eq (aref s (1- (match-beginning 0)))
+                                     ?\\))
+                      (unless (= last-end (match-beginning 0))
+                        (push (substring s last-end (match-beginning 0))
+                              subs))
+                      (save-match-data
+                        (push (apply f (jira-doc--submatches s))
+                              subs))
+                      (setq last-end (match-end 0)))
+                    (setq search-start (match-end 0)))
+                  (unless (= last-end (length s))
+                    (push (substring s last-end) subs))
                   (nreverse subs))
               (list s)))
           nodes))
@@ -621,7 +628,11 @@ which do not match are returned as-is."
   (let* ((mark-regexp (concat "\\("
                               (string-join (mapcar (lambda (d)
                                                        (let ((delim (regexp-quote (car d))))
-                                                         (concat delim "[^" delim "]+?" delim)))
+                                                         (concat delim
+                                                                 "\\(?:"
+                                                                 "\\\\" delim "\\|[^" delim "]"
+                                                                 "\\)+?"
+                                                                 delim)))
                                                    jira-doc--marks-delimiters)
                                            "\\|")
                               ;; don't use `jira-regexp-color' here
