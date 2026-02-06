@@ -350,6 +350,22 @@ BLOCK is the media node to format."
     l)
   "Inverted copy of `jira-doc--marks-delimiters', mapping mark symbols to markup strings.")
 
+(defun jira-doc--escape-markup (s)
+  "Return a copy of S with any reserved markup characters escaped."
+  ;; `replace-regexp-in-string' inherits special handling of backslash
+  ;; from `replace-match', so we can't use that here.
+  (let ((i 0)
+        (pat (rx-to-string
+              `(submatch (or ,@(mapcar #'car jira-doc--marks-delimiters)))))
+        ret)
+    (while (string-match pat s i)
+      (push (substring s i (match-beginning 0)) ret)
+      (push (concat "\\" (match-string 1 s)) ret)
+      (setq i (match-end 0)))
+    (when (< i (length s))
+      (push (substring s i) ret))
+    (apply #'concat (reverse ret))))
+
 (defun jira-doc--markup-with-marks (text marks)
   (cond ((alist-get 'link marks)
          (let ((url (alist-get 'link marks)))
@@ -357,7 +373,8 @@ BLOCK is the media node to format."
         ((memq 'code marks)
          (format "`%s`" text))
         (t
-         (let ((res text))
+         (let ((res
+                (jira-doc--escape-markup text)))
            (dolist (m marks)
              (pcase (assq m jira-doc--markup-marks)
                (`(,_kind ,char)
@@ -654,12 +671,19 @@ which do not match are returned as-is."
                   s))
             areas)))
 
+(defun jira-doc--remove-escapes (s)
+  "Remove backslash escapes from S."
+  (replace-regexp-in-string jira-regexp-char-escape
+                            #'(lambda (escaped)
+                                (string-remove-prefix "\\" escaped))
+                            s))
+
 (defun jira-doc--build-text (body &optional marks)
   "Make an ADF text node with BODY as contents.
 
 If given, MARKS should be a list of names of marks or ADF mark nodes."
   `(("type" . "text")
-    ("text" . ,body)
+    ("text" . ,(jira-doc--remove-escapes body))
     ,@(when marks
         `(("marks" . ,(apply #'vector
                              (mapcar (lambda (mark)
