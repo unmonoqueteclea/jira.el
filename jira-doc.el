@@ -369,7 +369,9 @@ BLOCK is the media node to format."
 (defun jira-doc--markup-with-marks (text marks)
   (cond ((alist-get 'link marks)
          (let ((url (alist-get 'link marks)))
-           (format "[%s|%s]" text url)))
+           (if (string= url text)
+               (format "[%s]" url)
+             (format "[%s|%s]" text url))))
         ((memq 'code marks)
          (format "`%s`" text))
         (t
