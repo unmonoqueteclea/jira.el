@@ -750,8 +750,14 @@ QUOTED-TEXT is the text to quote."
      ;; Only paragraphs and lists are allowed inside blockquotes.
      ;; Marks are also allowed, even though the ADF documentation says
      ;; they aren't.
-     ,@(let ((blocks (jira-doc-build-lists (list quoted-text))))
-         (mapcan #'jira-doc-build-inline-blocks blocks)))))
+     ,@(mapcar #'(lambda (b)
+                   (if (stringp b)
+                       `(("type" . "paragraph")
+                         ("content" .
+                          ,(mapcan #'jira-doc-build-inline-blocks
+                                   (string-split b "\n"))))
+                     b))
+               (jira-doc-build-lists (list quoted-text))))))
 
 (defun jira-doc--build-heading (heading-text)
   "Make an ADF heading node.
