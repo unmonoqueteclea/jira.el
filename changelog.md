@@ -1,4 +1,7 @@
 # Changelog
+## 2.18.0 (2026-02-10)
+- In detail view, update the handling of linked issues to match the handling of subtasks
+
 ## 2.17.0 (2026-01-24)
 - Add issue type filter to transient menu
 
