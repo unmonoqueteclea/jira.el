@@ -1,4 +1,11 @@
 # Changelog
+## 2.20.0 (2026-02-10)
+- Fix filter endpoint compatibility for older Jira Server installations by auto-detecting the correct endpoint (`filter/my` vs `filter/favourite`)
+
+## 2.19.0 (2026-02-10)
+- Add `jira-issues-default-type` customization variable to set a default issue type filter
+- Add "Any" option to Issue Type filter to allow disabling the default type filter
+
 ## 2.18.0 (2026-02-10)
 - In detail view, update the handling of linked issues to match the handling of subtasks
 

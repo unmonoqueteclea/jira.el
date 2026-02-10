@@ -392,13 +392,23 @@ CALLBACK is the function to call after the request is done."
 FORCE will force the request even if the filters are already stored.
 CALLBACK is the function to call after the request is done."
   (if (or force (not jira-filters))
-      (let* ((fmt (lambda (s) (cons (alist-get 'name s) (alist-get 'jql s)))))
+      (let* ((fmt (lambda (s) (cons (alist-get 'name s) (alist-get 'jql s))))
+             (success-cb (lambda (data _response) (setq jira-filters (mapcar fmt data))))
+             ;; Some Jira instances (especially older Server versions) don't support
+             ;; the `filter/my` endpoint, so we try `filter/favourite` as fallback
+             (error-cb
+              (cl-function
+               (lambda (&key response error-thrown &allow-other-keys)
+                 (if (and response (= (request-response-status-code response) 404))
+                     (jira-api-call "GET" "filter/favourite"
+                                    :callback success-cb
+                                    :complete (lambda (&rest _args) (when callback (funcall callback))))
+                   (jira-api--callback-error-log response error-thrown))))))
         (jira-api-call
          "GET" "filter/my?includeFavourites=true"
-         :callback
-         (lambda (data _response) (setq jira-filters (mapcar fmt data)))
-         :complete
-         (lambda (&rest _args) (when callback (funcall callback)))))
+         :callback success-cb
+         :error error-cb
+         :complete (lambda (&rest _args) (when callback (funcall callback)))))
     (when callback (funcall callback))))
 
 (cl-defun jira-api-get-issue-types (&key force callback)

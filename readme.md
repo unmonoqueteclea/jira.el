@@ -161,12 +161,16 @@ week.
 
 - ❓ **Does it work with my old on-premise instance?**
 
-	I try to provide support as much as possible, but I don’t have access to this kind of
-	JIRA installation, so I rely on the official documentation and user PRs and issues.
-	If you’re using API version 2, make sure to set `jira-api-version` (see the
+	I try to provide support as much as possible, but I don't have access to this kind of
+	JIRA installation, so I rely on the official documentation and user PRs and issues. If
+	you're using API version 2, make sure to set `jira-api-version` (see the
 	**Customization** section). Version `v2.8.2` fixes an issue with older on-premise
-	instances related to the endpoint that lists issues. I’m also working on making issue
+	instances related to the endpoint that lists issues. I'm also working on making issue
 	transitions work (see https://github.com/unmonoqueteclea/jira.el/issues/37).
+
+- ❓ **Does it work with Evil Mode?**
+
+	Not supported currently as I don't use Evil Mode. PRs welcome! See https://github.com/unmonoqueteclea/jira.el/issues/31
 
 ## Customization
 
@@ -185,6 +189,10 @@ This is the list of customizations you can set:
    `'(:key :issue-type-name :status-name :assignee-name :progress-percent :work-ratio
       :remaining-time :summary)`
 - `jira-issues-max-results`: Maximum number of Jira issues to retrieve
+- `jira-issues-default-type`: Default issue type filter for the issues list.
+  When set to a type name (e.g., "Epic", "Story", "Bug"), the issues list will
+  automatically filter to show only that type unless explicitly overridden via
+  the transient menu. Set to nil for no default filter. (default: `nil`)
 - `jira-tempo-max-results`: Maximum number of Tempo worklogs to retrieve
 - `jira-comments-display-recent-first`: The order to display Jira comments in
   issue detail view.
