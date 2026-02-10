@@ -1,4 +1,8 @@
 # Changelog
+## 2.19.0 (2026-02-10)
+- Add `jira-issues-default-type` customization variable to set a default issue type filter
+- Add "Any" option to Issue Type filter to allow disabling the default type filter
+
 ## 2.18.0 (2026-02-10)
 - In detail view, update the handling of linked issues to match the handling of subtasks
 

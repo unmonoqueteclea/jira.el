@@ -185,6 +185,10 @@ This is the list of customizations you can set:
    `'(:key :issue-type-name :status-name :assignee-name :progress-percent :work-ratio
       :remaining-time :summary)`
 - `jira-issues-max-results`: Maximum number of Jira issues to retrieve
+- `jira-issues-default-type`: Default issue type filter for the issues list.
+  When set to a type name (e.g., "Epic", "Story", "Bug"), the issues list will
+  automatically filter to show only that type unless explicitly overridden via
+  the transient menu. Set to nil for no default filter. (default: `nil`)
 - `jira-tempo-max-results`: Maximum number of Tempo worklogs to retrieve
 - `jira-comments-display-recent-first`: The order to display Jira comments in
   issue detail view.
