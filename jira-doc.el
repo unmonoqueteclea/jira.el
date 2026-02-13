@@ -658,7 +658,7 @@ which do not match are returned as-is."
                               ;; because we don't want the submatches.
                               "\\|{color:.+?}.*?{color}"
                               "\\)"))
-         (areas (jira-doc--split (list (string-trim text))
+         (areas (jira-doc--split (list text)
                                  "\n"
                                   #'jira-doc--build-hard-break))
          (areas (jira-doc--split areas
