@@ -25,7 +25,7 @@
 
 ;; Edit comments/descriptions with font-lock support.
 ;; Markup taken from:
-;; https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all
+;; https://confluence.atlassian.com/docm/latest/confluence-wiki-markup-1108674308.html
 
 ;;; Code:
 (eval-when-compile
