@@ -85,14 +85,17 @@
     ;; Instead of using text, we could look up the user's info based  on the 'id attr.
     (jira-fmt-mention text)))
 
-(defun jira-doc--format-date (block)
-  "Format BLOCK, a date node, as a string."
+(defun jira-doc--date-string (block)
+  "Convert date node BLOCK to a time string."
   (let* ((timestamp (alist-get 'timestamp (alist-get 'attrs block)))
          ;; 32-bit time_t only requires 10 digits but Jira sends 13?
 	 (correct-ts (if (= 13 (length timestamp)) (cl-subseq timestamp 0 10) timestamp))
-         (ts (string-to-number correct-ts))
-         (s (format-time-string "%F" ts t)))
-    (message "The timestamp is %s" timestamp)
+         (ts (string-to-number correct-ts)))
+    (format-time-string "%F" ts t)))
+
+(defun jira-doc--format-date (block)
+  "Format BLOCK, a date node, as a string."
+  (let ((s (jira-doc--date-string block)))
     (jira-fmt-date s t)))
 
 (defun jira-doc--format-task-item (block)
@@ -405,6 +408,10 @@ BLOCK is the media node to format."
     ;; nothing to do 🙂
     (alist-get 'text attrs)))
 
+(defun jira-doc--markup-date (block)
+  "Format BLOCK, a date node, as a string with markup."
+  (concat "{{" (jira-doc--date-string block) "}}"))
+
 (defun jira-doc--markup-task-item (block)
   "Format BLOCK, a taskItem node, as a string with markup."
   (let* ((attrs (alist-get 'attrs block))
@@ -434,6 +441,8 @@ BLOCK is the media node to format."
            (jira-doc--markup-mention block))
           ((string= type "emoji")
            (jira-doc--markup-emoji block))
+          ((string= type "date")
+           (jira-doc--markup-date block))
           ((string= type "taskItem")
            (jira-doc--markup-task-item block))
           (text (let ((marks (jira-doc--marks block)))
@@ -719,6 +728,17 @@ CONTENTS is the link text and URL."
                               (("href" . ,url)
                                ("title" . ,title))))))))
 
+(defun jira-doc--build-date (date)
+  "Make an ADF date node.
+DATE is the timestamp to use."
+  (let ((ts (encode-time
+             (parse-time-string (concat date "T00:00:00Z")))))
+    `(("type" . "date")
+      ("attrs" .
+       ;; timestamp format is:
+       ;; (seconds since Unix epoch) × 1000
+       (("timestamp" . ,(format-time-string "%s000" ts)))))))
+
 (defun jira-doc--build-code (contents)
   "Make an ADF text node marked as code.
 CONTENTS is the code text to mark."
@@ -853,6 +873,9 @@ like other marks, so it's easier to pretend they're blocks."
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-date
+                                  #'jira-doc--build-date))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-code
                                   #'jira-doc--build-code))

@@ -31,6 +31,7 @@
 (eval-when-compile
   (require 'rx))
 
+(require 'org)
 (require 'jira-users)
 (require 'jira-fmt)
 
@@ -130,9 +131,15 @@
 (defconst jira-regexp-inline-adf
   (rx "{ADF: " (+ alpha) ":" (submatch (+? any)) "}"))
 
+(defconst jira-regexp-date
+  (rx "{{"
+      (submatch (= 4 digit) "-" (= 2 digit) "-" (= 2 digit))
+      "}}"))
+
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
     (,jira-regexp-code 0 'jira-face-code t)
+    (,jira-regexp-date 1 'jira-face-date t)
     (,jira-regexp-link 0 'jira-face-link t)
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
@@ -239,6 +246,7 @@
 ;; C-c C-c: send
 ;; C-c C-k: cancel
 ;; C-c m: insert user mention
+;; C-c d: insert date
 
 ;; Markup:
 ;; *strong*
@@ -316,14 +324,21 @@ If the region is active, the tags are inserted around it"
          ;; leave point inside the color tags
          (backward-sexp 1))))
 
+(defun jira-edit-insert-date ()
+  "Prompt for a date, then insert it with markup at point."
+  (interactive
+   (let ((d (org-read-date nil t)))
+     (insert (format-time-string "{{%F}}" d)))))
+
 (defvar-keymap jira-edit-mode-map
   "C-c C-c" (lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
                 (funcall jira-edit--callback))
   "C-c C-k" 'kill-buffer
-  "C-c m"   'jira-edit-insert-mention
-  "C-c c"   'jira-edit-insert-color)
+  "C-c c"   'jira-edit-insert-color
+  "C-c d"   'jira-edit-insert-date
+  "C-c m"   'jira-edit-insert-mention)
 
 (define-derived-mode jira-edit-mode text-mode
   "Jira Edit"
