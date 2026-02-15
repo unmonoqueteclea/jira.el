@@ -863,7 +863,7 @@ ROWS are the table rows."
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes.
 Links and code are actually kinds of marks, but their ADF structure is not
 like other marks, so it's easier to pretend they're blocks."
-  (let ((blocks (jira-doc--split (list text)
+  (let ((blocks (jira-doc--split (list (string-trim text))
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
     (setq blocks (jira-doc-build-task-lists blocks))
@@ -1012,8 +1012,7 @@ like other marks, so it's easier to pretend they're blocks."
                               #'(lambda (marker text)
                                   (jira-doc--build-task-item (string-match-p (rx "[" (not space) "]")
                                                                              marker)
-                                                             (jira-doc-build-inline-blocks
-                                                              (string-trim text))))))
+                                                             (jira-doc-build-inline-blocks text)))))
       (pcase b
         ((map ("type" "taskItem"))
          (push b cur-list))
