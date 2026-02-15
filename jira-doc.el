@@ -600,7 +600,8 @@ Return un-marked text and a list of applicable marks."
                             text)
           (push `(("type" . "textColor")
                   ("attrs"
-                   ("color" . ,(match-string 1 text))))
+                   ("color" . ,(jira-fmt--color
+                                (match-string 1 text)))))
                 marks)
           (setq text (match-string 2 text)
                 any-matched t))
