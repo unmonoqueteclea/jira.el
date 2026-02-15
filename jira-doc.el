@@ -866,7 +866,6 @@ like other marks, so it's easier to pretend they're blocks."
   (let ((blocks (jira-doc--split (list (string-trim text))
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
-    (setq blocks (jira-doc-build-task-lists blocks))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-inline-adf
                                   #'jira-doc--build-inline-adf))
@@ -1045,7 +1044,8 @@ like other marks, so it's easier to pretend they're blocks."
 	   (jira-doc--split jira-regexp-heading      #'jira-doc--build-heading)
 	   (jira-doc--split jira-regexp-hr           #'jira-doc--build-rule)
 	   (jira-doc-build-tables)
-	   (jira-doc-build-lists))))
+	   (jira-doc-build-lists)
+           (jira-doc-build-task-lists))))
     (mapcar (lambda (s)
 	      (if (stringp s)
 		  `(("type" . "paragraph")
