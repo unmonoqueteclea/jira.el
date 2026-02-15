@@ -353,21 +353,28 @@ BLOCK is the media node to format."
     l)
   "Inverted copy of `jira-doc--marks-delimiters', mapping mark symbols to markup strings.")
 
+(defvar jira-doc--inhibit-escapes nil
+  "If true, do not add backslash escapes or interpret them.")
+
 (defun jira-doc--escape-markup (s)
-  "Return a copy of S with any reserved markup characters escaped."
-  ;; `replace-regexp-in-string' inherits special handling of backslash
-  ;; from `replace-match', so we can't use that here.
-  (let ((i 0)
-        (pat (rx-to-string
-              `(submatch (or ,@(mapcar #'car jira-doc--marks-delimiters)))))
-        ret)
-    (while (string-match pat s i)
-      (push (substring s i (match-beginning 0)) ret)
-      (push (concat "\\" (match-string 1 s)) ret)
-      (setq i (match-end 0)))
-    (when (< i (length s))
-      (push (substring s i) ret))
-    (apply #'concat (reverse ret))))
+  "Return a copy of S with any reserved markup characters escaped.
+
+If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
+  (if jira-doc--inhibit-escapes
+      s
+    ;; `replace-regexp-in-string' inherits special handling of backslash
+    ;; from `replace-match', so we can't use that here.
+    (let ((i 0)
+          (pat (rx-to-string
+                `(submatch (or ,@(mapcar #'car jira-doc--marks-delimiters)))))
+          ret)
+      (while (string-match pat s i)
+        (push (substring s i (match-beginning 0)) ret)
+        (push (concat "\\" (match-string 1 s)) ret)
+        (setq i (match-end 0)))
+      (when (< i (length s))
+        (push (substring s i) ret))
+      (apply #'concat (reverse ret)))))
 
 (defun jira-doc--markup-with-marks (text marks)
   (cond ((alist-get 'link marks)
@@ -517,6 +524,11 @@ BLOCK is the media node to format."
      (t
       (jira-doc--markup-unsupported block)))))
 
+(defun jira-doc--markup-code-block (block)
+  "Format BLOCK, a codeBlock node, with markup."
+  (let ((jira-doc--inhibit-escapes t))
+    (jira-doc--markup-content-block block)))
+
 (defun jira-doc--markup-list (block)
   "Format BLOCK, an orderedList or bulletList, with markup."
   (let ((jira-doc--markup-list-prefix
@@ -548,6 +560,8 @@ BLOCK is the media node to format."
     (cond ((or (string= type "orderedList")
                (string= type "bulletList"))
            (jira-doc--markup-list block))
+          ((string= type "codeBlock")
+           (jira-doc--markup-code-block block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--markup-content-block block))
@@ -684,11 +698,15 @@ which do not match are returned as-is."
             areas)))
 
 (defun jira-doc--remove-escapes (s)
-  "Remove backslash escapes from S."
-  (replace-regexp-in-string jira-regexp-char-escape
-                            #'(lambda (escaped)
-                                (string-remove-prefix "\\" escaped))
-                            s))
+  "Remove backslash escapes from S.
+
+If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
+  (if jira-doc--inhibit-escapes
+      s
+    (replace-regexp-in-string jira-regexp-char-escape
+                              #'(lambda (escaped)
+                                  (string-remove-prefix "\\" escaped))
+                              s)))
 
 (defun jira-doc--build-text (body &optional marks)
   "Make an ADF text node with BODY as contents.
@@ -743,8 +761,9 @@ DATE is the timestamp to use."
 (defun jira-doc--build-code (contents)
   "Make an ADF text node marked as code.
 CONTENTS is the code text to mark."
-  (jira-doc--build-text contents
-                        `((("type" . "code")))))
+  (let ((jira-doc--inhibit-escapes t))
+    (jira-doc--build-text contents
+                          `((("type" . "code"))))))
 
 (defun jira-doc--build-emoji (name)
   "Make an ADF emoji node.
