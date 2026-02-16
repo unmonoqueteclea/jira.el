@@ -491,8 +491,7 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
   "Format content BLOCK to a string with markup."
   (let* ((type (alist-get 'type block))
 	 (attrs (alist-get 'attrs block))
-         (sep (if (or (string= type "paragraph")
-                      (string= type "blockquote"))
+         (sep (if (string= type "paragraph")
                   ""
                 "\n"))
          (prefix (if (string= type "listItem")
@@ -510,7 +509,7 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
      ((string= type "codeBlock")
       (concat "{code}\n" content "\n{code}\n"))
      ((string= type "blockquote")
-      (concat "bq. " content))
+      (concat "bq. \n" content))
      ((string= type "rule")
       "----")
      ((string= type "heading")

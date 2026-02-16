@@ -150,7 +150,7 @@
 (defconst jira-regexp-blockquote
   (rx bol
       "bq. "
-      (submatch (+ not-newline)
+      (submatch (* not-newline)
                 (* (or "\r" "\n" "\r\n")
                    (+ not-newline)))))
 
