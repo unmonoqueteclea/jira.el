@@ -25,40 +25,97 @@
 
 ;; Edit comments/descriptions with font-lock support.
 ;; Markup taken from:
-;; https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all
+;; https://confluence.atlassian.com/docm/latest/confluence-wiki-markup-1108674308.html
 
 ;;; Code:
 (eval-when-compile
   (require 'rx))
 
+(require 'org)
 (require 'jira-users)
 (require 'jira-fmt)
 
 (defvar-local jira-edit--callback nil
   "The callback function to call after adding a comment.")
 
+(defconst jira-regexp-color-tag
+  (rx "{color"
+      (? ":"
+         (or (+ alpha)
+             (seq "#" (+ hex))))
+      "}"))
+
+(defconst jira-regexp-color
+  (rx "{color:"
+      (submatch (or (+ alpha)
+                    (seq "#" (+ hex))))
+      "}"
+      (submatch (*? any))
+      "{color}"))
+
+(defun jira-edit--markable-p (point)
+  "Return t if POINT is at a place where text marks may apply."
+  (let ((face (get-text-property point 'face)))
+    (and (not (eq (char-before point) ?\\))
+         (if (consp face)
+             (and (not (memq 'jira-face-code face))
+                  (not (memq 'jira-face-link face)))
+           (and (not (eq 'jira-face-code face))
+                (not (eq 'jira-face-link face)))))))
+
+(defun jira-edit--mark-matcher (regexp)
+  "Return a function which searches for markup matching REGEXP."
+  #'(lambda (limit)
+      (let (matched)
+        (while (and (< (point) limit)
+                    (not matched))
+          (if (re-search-forward regexp limit t)
+              (setq matched
+                    (and (jira-edit--markable-p (match-beginning 0))
+                         (jira-edit--markable-p (match-end 0))))
+            (goto-char limit)))
+        matched)))
+
 (defvar jira-mark-keywords
-  `(("\\_<\\*[^*\r\n]+?\\*\\_>"
-     0 'bold prepend)
-    ("\\_<_[^_\r\n]+?_\\_>"
-     0 'italic prepend)
-    ("\\_<-[^-\r\n]+?-\\_>"
-     0 'jira-face-deleted prepend)
-    ("\\_<\\+[^\\r\n+]+?\\+\\_>"
-     0 'jira-face-inserted prepend)
+  `((,(jira-edit--mark-matcher
+       (rx "*" (not (or "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
+     0 'bold append)
+    ;; unlike other marks, deleted checks for word boundaries to avoid
+    ;; false positives on hyphenated words: like-so and then like-this.
+    (,(jira-edit--mark-matcher
+       (rx bow "-" (not (or "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
+     0 'jira-face-deleted append)
+    (,(jira-edit--mark-matcher
+       (rx "_" (+? (or "\\_" (not (or "\r" "\n")))) "_"))
+     0 'italic append)
+    (,(jira-edit--mark-matcher
+       (rx "+" (+? (or "\\+" (not (or "\r" "\n")))) "+"))
+     0 'jira-face-inserted append)
     ;; can't display subscript or superscript: AFAICT font-lock
     ;; shouldn't manage the 'display text property.
-    ("\\_<\\\^[^\\r\n^]+?\\\^\\_>"
-     0 'font-lock-builtin-face prepend)
-    ("\\_<~[^~\r\n]+?~\\_>"
-     0 'font-lock-builtin-face prepend)))
+    (,(jira-edit--mark-matcher
+       (rx "^" (+? (or "\\^" (not (or "\r" "\n")))) "^"))
+     0 'font-lock-builtin-face append)
+    (,(jira-edit--mark-matcher
+       (rx "~" (+? (or "\\~" (not (or "\r" "\n")))) "~"))
+     0 'font-lock-builtin-face append)
+    (,jira-regexp-color-tag
+     0 'font-lock-builtin-face append)))
 
 (defconst jira-regexp-link
-  (rx "[" (submatch (*? (not "]"))) "]"))
+  (rx "["
+      (submatch
+       ;; title
+       (? (+? any) "|")
+       ;; scheme
+       alpha (*? (or alpha digit "+" "-" "."))
+       "://"
+       (*? (not "]")))
+      "]"))
 
 (defconst jira-regexp-code
-  (rx (or (seq "`" (submatch-n 1 (*? (not "`"))) "`")
-          (seq "{{" (submatch-n 1 (*? (not "}"))) "}}"))))
+  (rx (or (seq "`" (submatch-n 1 (*? (or "\\`" (not "`")))) "`")
+          (seq "{{" (submatch-n 1 (*? (or "\\}" (not "}")))) "}}"))))
 
 (defconst jira-regexp-mention
   (rx "[~" (submatch (*? (not "]"))) "]"))
@@ -69,15 +126,33 @@
 (defconst jira-regexp-task-item
   (rx bol (* space) (submatch "[" (? any) "]") (submatch (*? not-newline)) eol))
 
+(defconst jira-regexp-toplevel-adf
+  (rx "{ADF:" (+ alpha) ":" (submatch (+? any)) "}"))
+(defconst jira-regexp-inline-adf
+  (rx "{ADF: " (+ alpha) ":" (submatch (+? any)) "}"))
+
+(defconst jira-regexp-date
+  (rx "{{"
+      (submatch (= 4 digit) "-" (= 2 digit) "-" (= 2 digit))
+      "}}"))
+
 (defvar jira-inline-block-keywords
   `((,jira-regexp-mention . 'jira-face-mention)
-    (,jira-regexp-code . 'jira-face-code)
-    (,jira-regexp-link . 'jira-face-link)
+    (,jira-regexp-code 0 'jira-face-code t)
+    (,jira-regexp-date 1 'jira-face-date t)
+    (,jira-regexp-link 0 'jira-face-link t)
     (,jira-regexp-task-item 1 font-lock-builtin-face)
-    (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)))
+    (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
+    (,jira-regexp-inline-adf
+     (0 '(face jira-face-placeholder))
+     (1 '(face jira-face-placeholder invisible jira-inline-adf)))))
 
 (defconst jira-regexp-blockquote
-  (rx bol "bq. " (submatch (+ not-newline))))
+  (rx bol
+      "bq. "
+      (submatch (* not-newline)
+                (* (or "\r" "\n" "\r\n")
+                   (+ not-newline)))))
 
 (defconst jira-regexp-heading
   (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
@@ -104,13 +179,21 @@
       (submatch (+? not-newline))
       eol))
 
+(defconst jira-regexp-code-block
+  (rx bol "{code}" (submatch (*? anychar)) "{code}" (*? whitespace) eol))
+
 (defvar jira-block-keywords
-  `((,jira-regexp-blockquote
+  `((,jira-regexp-code-block
+     . 'jira-face-code)
+    (,jira-regexp-blockquote
      0 'jira-face-blockquote prepend)
     (,jira-regexp-list-item
-     1 font-lock-builtin-face)
+     1 font-lock-builtin-face prepend)
     (,jira-regexp-table-row
      . 'jira-face-code)
+    (,jira-regexp-toplevel-adf
+     (0 '(face jira-face-placeholder))
+     (1 '(face jira-face-placeholder invisible jira-inline-adf)))
     ;; can't use `jira-regexp-heading' because font-lock can't select
     ;; a face based on the contents of the match.
     (,(rx bol "h1. " (*? not-newline) eol)
@@ -124,13 +207,16 @@
     (,(rx bol "h5. " (*? not-newline) eol)
      . 'jira-face-h5)
     (,(rx bol "h6. " (*? not-newline) eol)
-     . 'jira-face-h6)))
+     . 'jira-face-h6)
+    (,jira-regexp-hr
+     . font-lock-builtin-face)))
 
 (defconst jira-regexp-comment-instruction
   (rx bol (+ ";") (+? not-newline) eol))
 
-(defconst jira-regexp-code-block
-  (rx bol "{code}" (submatch (*? anychar)) "{code}" (*? whitespace) eol))
+(defconst jira-regexp-char-escape
+  (rx (or (seq bol "\\" (submatch-n 1 (or "h" "b")))
+          (seq "\\" (submatch-n 1 punct)))))
 
 ;; Implementation taken from https://stackoverflow.com/questions/9452615/emacs-is-there-a-clear-example-of-multi-line-font-locking
 (defun jira-edit-font-lock-extend-region ()
@@ -146,9 +232,10 @@
       (setq font-lock-beg found))))
 
 (defvar jira-font-lock-keywords
-  (append `((,jira-regexp-comment-instruction
+  (append `((,jira-regexp-char-escape
+             0 font-lock-constant-face)
+            (,jira-regexp-comment-instruction
              0 font-lock-comment-face prepend))
-          `((,jira-regexp-code-block . 'jira-face-code))
           jira-block-keywords
           jira-inline-block-keywords
           jira-mark-keywords))
@@ -159,6 +246,7 @@
 ;; C-c C-c: send
 ;; C-c C-k: cancel
 ;; C-c m: insert user mention
+;; C-c d: insert date
 
 ;; Markup:
 ;; *strong*
@@ -168,6 +256,8 @@
 ;; ^superscript^
 ;; ~subscript~
 ;; `code`
+
+;; \ escapes the next markup character
 
 ;; [title|link]
 ;; :emoji:
@@ -213,29 +303,63 @@
     (`(,name ,_id)
      (insert "[~" name "]"))))
 
+(defun jira-edit-make-color (text color)
+  (concat (format "{color:%s}" color)
+          text
+          "{color}"))
+
+(defun jira-edit-insert-color (color)
+  "Prompt for a color value, then insert color tags at point.
+
+If the region is active, the tags are inserted around it"
+  (interactive
+   (list (read-color)))
+  (cond ((use-region-p)
+         (let ((text (buffer-substring (region-beginning)
+                                       (region-end))))
+           (delete-region (region-beginning) (region-end))
+           (insert (jira-edit-make-color text color))))
+        (t
+         (insert (jira-edit-make-color "" color))
+         ;; leave point inside the color tags
+         (backward-sexp 1))))
+
+(defun jira-edit-insert-date ()
+  "Prompt for a date, then insert it with markup at point."
+  (interactive
+   (let ((d (org-read-date nil t)))
+     (insert (format-time-string "{{%F}}" d)))))
+
 (defvar-keymap jira-edit-mode-map
   "C-c C-c" (lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
                 (funcall jira-edit--callback))
   "C-c C-k" 'kill-buffer
+  "C-c c"   'jira-edit-insert-color
+  "C-c d"   'jira-edit-insert-date
   "C-c m"   'jira-edit-insert-mention)
 
 (define-derived-mode jira-edit-mode text-mode
   "Jira Edit"
   "Major mode for writing Jira comments, descriptions etc."
-  (setq font-lock-defaults '(jira-font-lock-keywords))
+  (setq font-lock-defaults '(jira-font-lock-keywords
+                             nil
+                             nil
+                             nil
+                             (font-lock-extra-managed-props
+                              invisible)))
+  (add-to-invisibility-spec '(jira-inline-adf . t))
   (setq-local font-lock-multiline t)
   (add-hook 'font-lock-extend-region-functions
             #'jira-edit-font-lock-extend-region)
   (set-syntax-table (let ((st (make-syntax-table)))
+                      (modify-syntax-entry ?\" "w" st)
                       (modify-syntax-entry ?+ "w" st)
                       (modify-syntax-entry ?* "w" st)
                       (modify-syntax-entry ?: "w" st)
                       (modify-syntax-entry ?_ "w" st)
                       (modify-syntax-entry ?- "w" st)
-                      (modify-syntax-entry ?{ "w" st)
-                      (modify-syntax-entry ?} "w" st)
                       st))
   (set-buffer-modified-p nil))
 

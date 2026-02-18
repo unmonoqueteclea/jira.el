@@ -178,6 +178,16 @@ It will include the given TEXT and run the CALLBACK at the end."
                (message "Comment added to %s" issue-key)
 	       (funcall callback))))
 
+(defun jira-actions-edit-comment (issue-key comment-id text callback)
+  "Update a comment on the issue ISSUE-KEY with ID COMMENT-ID.
+It will include the given TEXT and run the CALLBACK at the end."
+  (jira-api-call
+   "PUT" (concat "issue/" issue-key "/comment/" comment-id)
+   :data `(("body" . ,(jira-doc-build text)))
+   :callback (lambda (_data _response)
+               (message "Comment %s updated on %s" comment-id issue-key)
+	       (funcall callback))))
+
 (defun jira-actions-delete-comment (issue-key comment-id callback)
   "Delete the comment COMMENT-ID from ISSUE-KEY and run CALLBACK when done."
   (jira-api-call

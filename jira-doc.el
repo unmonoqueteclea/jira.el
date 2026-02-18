@@ -28,6 +28,11 @@
 ;; See https://developer.atlassian.com/cloud/jira/platform/apis/document/
 ;; Not all the kinds of blocks are supported yet, only the most common ones.
 
+;; There are three entry points in this file:
+;; * convert ADF to formatted text: `jira-doc-format'
+;; * convert ADF to markup: `jira-doc-markup'
+;; * convert markup to ADF: `jira-doc-build'
+
 ;;; Code:
 
 (require 'cl-lib)
@@ -80,14 +85,17 @@
     ;; Instead of using text, we could look up the user's info based  on the 'id attr.
     (jira-fmt-mention text)))
 
-(defun jira-doc--format-date (block)
-  "Format BLOCK, a date node, as a string."
+(defun jira-doc--date-string (block)
+  "Convert date node BLOCK to a time string."
   (let* ((timestamp (alist-get 'timestamp (alist-get 'attrs block)))
          ;; 32-bit time_t only requires 10 digits but Jira sends 13?
 	 (correct-ts (if (= 13 (length timestamp)) (cl-subseq timestamp 0 10) timestamp))
-         (ts (string-to-number correct-ts))
-         (s (format-time-string "%F" ts t)))
-    (message "The timestamp is %s" timestamp)
+         (ts (string-to-number correct-ts)))
+    (format-time-string "%F" ts t)))
+
+(defun jira-doc--format-date (block)
+  "Format BLOCK, a date node, as a string."
+  (let ((s (jira-doc--date-string block)))
     (jira-fmt-date s t)))
 
 (defun jira-doc--format-task-item (block)
@@ -209,15 +217,19 @@ BLOCK is the media node to format."
   (mapcar #'jira-doc--format-content-block
           (alist-get 'content block)))
 
+(defun jira-doc--table-header (block)
+  "Find the header row of BLOCK, a table node."
+  (seq-find (lambda (r)
+              (seq-every-p (lambda (c)
+                             (string= "tableHeader"
+                                      (alist-get 'type c)))
+                           (alist-get 'content r)))
+            (alist-get 'content block)))
+
 (defun jira-doc--format-table (block)
   "Format BLOCK, a table node, as a string."
   (let* ((rows (alist-get 'content block))
-         (header (seq-find (lambda (r)
-                             (seq-every-p (lambda (c)
-                                            (string= "tableHeader"
-                                                     (alist-get 'type c)))
-                                          (alist-get 'content r)))
-                           rows))
+         (header (jira-doc--table-header block))
          (body (remove header rows))
          (header (jira-doc--format-table-row header))
          (body (mapcar #'jira-doc--format-table-row body))
@@ -328,6 +340,254 @@ BLOCK is the media node to format."
        "\n"))))
 
 
+;; Converting ADF to Jira-style markup.
+
+(defconst jira-doc--markup-marks
+  ;; We need this because sub and sup are attrs in
+  ;; `jira-doc--marks-delimiters', not just symbols.
+  (let ((l `((sub "~")
+             (sup "^"))))
+    (pcase-dolist (`(,char ,kind) jira-doc--marks-delimiters)
+      (if (symbolp kind)
+          (push `(,kind ,char) l)))
+    l)
+  "Inverted copy of `jira-doc--marks-delimiters', mapping mark symbols to markup strings.")
+
+(defvar jira-doc--inhibit-escapes nil
+  "If true, do not add backslash escapes or interpret them.")
+
+(defun jira-doc--escape-markup (s)
+  "Return a copy of S with any reserved markup characters escaped.
+
+If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
+  (if jira-doc--inhibit-escapes
+      s
+    ;; `replace-regexp-in-string' inherits special handling of backslash
+    ;; from `replace-match', so we can't use that here.
+    (let ((i 0)
+          (pat (rx-to-string
+                `(submatch (or ,@(mapcar #'car jira-doc--marks-delimiters)))))
+          ret)
+      (while (string-match pat s i)
+        (push (substring s i (match-beginning 0)) ret)
+        (push (concat "\\" (match-string 1 s)) ret)
+        (setq i (match-end 0)))
+      (when (< i (length s))
+        (push (substring s i) ret))
+      (apply #'concat (reverse ret)))))
+
+(defun jira-doc--markup-with-marks (text marks)
+  (cond ((alist-get 'link marks)
+         (let ((url (alist-get 'link marks)))
+           (if (string= url text)
+               (format "[%s]" url)
+             (format "[%s|%s]" text url))))
+        ((memq 'code marks)
+         (format "`%s`" text))
+        (t
+         (let ((res
+                (jira-doc--escape-markup text)))
+           (dolist (m marks)
+             (pcase (assq m jira-doc--markup-marks)
+               (`(,_kind ,char)
+                 (setq res (concat char res char)))
+               (_
+                (pcase m
+                  (`(color . ,hue)
+                   (setq res (jira-edit-make-color res hue)))
+                  (_
+                   (message "[Jira Doc Error]: discarding unsupported mark '%s'"
+                            m))))))
+           res))))
+
+(defun jira-doc--markup-mention (block)
+  "Format block, a mention node, as a string with markup."
+  (let* ((attrs (alist-get 'attrs block))
+         (text (string-remove-prefix "@" (alist-get 'text attrs))))
+    ;; FIXME: combine this with `jira-edit-insert-mention'
+    (format "[~%s]" text)))
+
+(defun jira-doc--markup-emoji (block)
+  "Format BLOCK, a taskItem node, as a string with markup."
+  (let ((attrs (alist-get 'attrs block)))
+    ;; if this is a Jira named emoji, it already has the :...: markup,
+    ;; so we can just use that. Otherwise it's a Unicode emoji, so
+    ;; nothing to do 🙂
+    (alist-get 'text attrs)))
+
+(defun jira-doc--markup-date (block)
+  "Format BLOCK, a date node, as a string with markup."
+  (concat "{{" (jira-doc--date-string block) "}}"))
+
+(defun jira-doc--markup-task-item (block)
+  "Format BLOCK, a taskItem node, as a string with markup."
+  (let* ((attrs (alist-get 'attrs block))
+         (state (alist-get 'state attrs)))
+    (concat "["
+            (if (string= state "DONE") "x" "")
+            "] "
+            (string-join (mapcar #'jira-doc--markup-inline-block
+                                 (alist-get 'content block))))))
+
+(defun jira-doc--markup-unsupported (block)
+  "Format BLOCK so that it will be passed literally through markup."
+  (let ((toplevel-p (not (member (alist-get 'type block)
+                                 jira-doc--inline-blocks))))
+    (format "{ADF:%s%s:%S}"
+            (if toplevel-p "" " ")
+            (alist-get 'type block)
+            block)))
+
+(defun jira-doc--markup-inline-block (block)
+  "Format inline BLOCK to a string with markup."
+  (let ((type (alist-get 'type block))
+        (text (alist-get 'text block)))
+    (cond ((string= type "hardBreak")
+           "\n")
+          ((string= type "mention")
+           (jira-doc--markup-mention block))
+          ((string= type "emoji")
+           (jira-doc--markup-emoji block))
+          ((string= type "date")
+           (jira-doc--markup-date block))
+          ((string= type "taskItem")
+           (jira-doc--markup-task-item block))
+          (text (let ((marks (jira-doc--marks block)))
+                  (jira-doc--markup-with-marks text marks)))
+          (t
+           (jira-doc--markup-unsupported block)))))
+
+(defun jira-doc--markup-table-row (block delimiter)
+  "Format BLOCK, a tableRow node, as a string."
+  (concat delimiter
+          (mapconcat #'jira-doc--markup-content-block
+                     (alist-get 'content block)
+                     delimiter)
+          delimiter))
+
+(defun jira-doc--markup-table (block)
+  "Format BLOCK, a table node, as a string."
+  (let* ((rows (alist-get 'content block))
+         (header (jira-doc--table-header block)))
+    (string-join (mapcar (lambda (r)
+                           (jira-doc--markup-table-row
+                            r
+                            (if (eq r header)
+                                "||"
+                              "|")))
+                         rows)
+                 "\n")))
+
+(defun jira-doc--markup-task-list (block)
+  "Format a taskList node to a string."
+  (let ((children (alist-get 'content block)))
+    (string-join (mapcar #'jira-doc--markup-inline-block
+                         children)
+                 "\n")))
+
+(defvar jira-doc--markup-list-prefix "")
+
+(defun jira-doc--markup-content-block (block)
+  "Format content BLOCK to a string with markup."
+  (let* ((type (alist-get 'type block))
+	 (attrs (alist-get 'attrs block))
+         (sep (if (string= type "paragraph")
+                  ""
+                "\n"))
+         (prefix (if (string= type "listItem")
+                     (concat jira-doc--markup-list-prefix " ")
+                   ""))
+	 (content
+	  (concat
+	   prefix
+	   (jira-doc--list-to-str
+	    (mapcar (lambda (b) (jira-doc--markup-block b)) (alist-get 'content block))
+            sep))))
+    (cond
+     ((string= type "table")
+      (jira-doc--markup-table block))
+     ((string= type "codeBlock")
+      (concat "{code}\n" content "\n{code}\n"))
+     ((string= type "blockquote")
+      (concat "bq. \n" content))
+     ((string= type "rule")
+      "----")
+     ((string= type "heading")
+      (format "h%d. %s"
+              (alist-get 'level attrs)
+              content))
+     ((string= type "taskList")
+      (jira-doc--markup-task-list block))
+     ((member type '("paragraph" "listItem" "tableCell" "tableHeader" "taskItem"))
+      content)
+     (t
+      (jira-doc--markup-unsupported block)))))
+
+(defun jira-doc--markup-code-block (block)
+  "Format BLOCK, a codeBlock node, with markup."
+  (let ((jira-doc--inhibit-escapes t))
+    (jira-doc--markup-content-block block)))
+
+(defun jira-doc--markup-list (block)
+  "Format BLOCK, an orderedList or bulletList, with markup."
+  (let ((jira-doc--markup-list-prefix
+         (concat jira-doc--markup-list-prefix
+                 (if (string= (alist-get 'type block)
+                              "orderedList")
+                     "#"
+                   "*"))))
+    (jira-doc--list-to-str
+     ;; An intermediate list-item with a blank body and a nested list
+     ;; child should not be translated into markup; it just makes the
+     ;; result more complicated.
+     (mapcar (lambda (x)
+               (jira-doc--markup-block
+                (or (pcase x
+                      ((map ('type "listItem")
+                            content)
+                       (pcase content
+                         (`[((type . "paragraph"))
+                            ,child]
+                          child))))
+                    x)))
+             (alist-get 'content block))
+     "\n")))
+
+(defun jira-doc--markup-block (block)
+  "Format BLOCK to a string with markup."
+  (let ((type (alist-get 'type block)))
+    (cond ((or (string= type "orderedList")
+               (string= type "bulletList"))
+           (jira-doc--markup-list block))
+          ((string= type "codeBlock")
+           (jira-doc--markup-code-block block))
+          ((or (member type jira-doc--top-level-blocks)
+               (member type jira-doc--child-blocks))
+           (jira-doc--markup-content-block block))
+          (t
+           (jira-doc--markup-inline-block block)))))
+
+(defun jira-doc-markup-adf (doc)
+  "Format DOC, an ADF tree, to a string with markup."
+  (let ((content (alist-get 'content doc)))
+    (jira-doc--list-to-str
+     (mapcar #'jira-doc--markup-block content)
+     "\n\n")))
+
+;;;; Markup for v2 comment bodies. Our markup was designed to be a
+;;;; subset of what v2 expects, so this is much easier than converting
+;;;; ADF.
+(defun jira-doc-markup-v2 (text)
+  "Convert v2 markup into `jira-edit-mode' markup."
+  text)
+
+(defun jira-doc-markup (doc)
+  "Format DOC with markup for `jira-edit-mode'."
+  (if (stringp doc)
+      (jira-doc-markup-v2 doc)
+    (jira-doc-markup-adf doc)))
+
+
 ;; Building ADF from Jira-style markdown.
 
 (defun jira-doc--collect-marks (text)
@@ -349,6 +609,15 @@ Return un-marked text and a list of applicable marks."
                                         (length delim)))
                      marks (cons type marks)
                      any-matched t)))))
+        (when (string-match (rx bos (regexp jira-regexp-color) eos)
+                            text)
+          (push `(("type" . "textColor")
+                  ("attrs"
+                   ("color" . ,(jira-fmt--color
+                                (match-string 1 text)))))
+                marks)
+          (setq text (match-string 2 text)
+                any-matched t))
         (unless any-matched
           (setq done t))))
     (cl-values text marks)))
@@ -372,33 +641,50 @@ transformed by calling F with the submatches as arguments. Substrings
 which do not match are returned as-is."
   (mapcan (lambda (s)
             (if (stringp s)
-                (let ((i 0)
+                (let ((search-start 0)
+                      (last-end 0)
                       (subs '()))
-                  (while (and (< i (length s))
-                              (string-match regexp s i))
-                    (unless (= i (match-beginning 0))
-                      (push (substring s i (match-beginning 0))
-                            subs))
-                    (save-match-data
-                      (push (apply f (jira-doc--submatches s))
-                            subs))
-                    (setq i (match-end 0)))
-                  (unless (= i (length s))
-                    (push (substring s i) subs))
+                  (while (and (< search-start (length s))
+                              (string-match regexp s search-start))
+                    ;; if the match begins with an escaped character,
+                    ;; it doesn't count.
+                    (unless (and (> (match-beginning 0) 0)
+                                 (eq (aref s (1- (match-beginning 0)))
+                                     ?\\))
+                      (unless (= last-end (match-beginning 0))
+                        (push (substring s last-end (match-beginning 0))
+                              subs))
+                      (save-match-data
+                        (push (apply f (jira-doc--submatches s))
+                              subs))
+                      (setq last-end (match-end 0)))
+                    (setq search-start (match-end 0)))
+                  (unless (= last-end (length s))
+                    (push (substring s last-end) subs))
                   (nreverse subs))
               (list s)))
           nodes))
 
 (defun jira-doc--build-marked-text (text)
   "Split TEXT into a list of ADF text nodes with marks."
-  (let* ((mark-regexp (concat "\\_<\\("
+  (let* ((mark-regexp (concat "\\("
                               (string-join (mapcar (lambda (d)
                                                        (let ((delim (regexp-quote (car d))))
-                                                         (concat delim "[^" delim "]+?" delim)))
+                                                         (concat delim
+                                                                 "\\(?:"
+                                                                 "\\\\" delim "\\|[^" delim "]"
+                                                                 "\\)+?"
+                                                                 delim)))
                                                    jira-doc--marks-delimiters)
                                            "\\|")
-                              "\\)\\_>"))
+                              ;; don't use `jira-regexp-color' here
+                              ;; because we don't want the submatches.
+                              "\\|{color:.+?}.*?{color}"
+                              "\\)"))
          (areas (jira-doc--split (list text)
+                                 "\n"
+                                  #'jira-doc--build-hard-break))
+         (areas (jira-doc--split areas
                                  mark-regexp
                                  (lambda (s)
                                      (pcase (jira-doc--collect-marks s)
@@ -410,12 +696,23 @@ which do not match are returned as-is."
                   s))
             areas)))
 
+(defun jira-doc--remove-escapes (s)
+  "Remove backslash escapes from S.
+
+If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
+  (if jira-doc--inhibit-escapes
+      s
+    (replace-regexp-in-string jira-regexp-char-escape
+                              #'(lambda (escaped)
+                                  (string-remove-prefix "\\" escaped))
+                              s)))
+
 (defun jira-doc--build-text (body &optional marks)
   "Make an ADF text node with BODY as contents.
 
 If given, MARKS should be a list of names of marks or ADF mark nodes."
   `(("type" . "text")
-    ("text" . ,body)
+    ("text" . ,(jira-doc--remove-escapes body))
     ,@(when marks
         `(("marks" . ,(apply #'vector
                              (mapcar (lambda (mark)
@@ -449,11 +746,23 @@ CONTENTS is the link text and URL."
                               (("href" . ,url)
                                ("title" . ,title))))))))
 
+(defun jira-doc--build-date (date)
+  "Make an ADF date node.
+DATE is the timestamp to use."
+  (let ((ts (encode-time
+             (parse-time-string (concat date "T00:00:00Z")))))
+    `(("type" . "date")
+      ("attrs" .
+       ;; timestamp format is:
+       ;; (seconds since Unix epoch) × 1000
+       (("timestamp" . ,(format-time-string "%s000" ts)))))))
+
 (defun jira-doc--build-code (contents)
   "Make an ADF text node marked as code.
 CONTENTS is the code text to mark."
-  (jira-doc--build-text contents
-                        `((("type" . "code")))))
+  (let ((jira-doc--inhibit-escapes t))
+    (jira-doc--build-text contents
+                          `((("type" . "code"))))))
 
 (defun jira-doc--build-emoji (name)
   "Make an ADF emoji node.
@@ -461,6 +770,9 @@ NAME is the emoji name."
   `(("type" . "emoji")
     ("attrs" .
      (("shortName" . ,name)))))
+
+(defun jira-doc--build-inline-adf (block-str)
+  (read block-str))
 
 (defun jira-doc--build-code-block (body)
   "Make an ADF codeBlock node.
@@ -474,9 +786,17 @@ BODY is the code block content."
 QUOTED-TEXT is the text to quote."
   `(("type" . "blockquote")
     ("content"
-     (("type" . "paragraph")
-      ("content"
-       ,@(jira-doc-build-inline-blocks quoted-text))))))
+     ;; Only paragraphs and lists are allowed inside blockquotes.
+     ;; Marks are also allowed, even though the ADF documentation says
+     ;; they aren't.
+     ,@(mapcar #'(lambda (b)
+                   (if (stringp b)
+                       `(("type" . "paragraph")
+                         ("content" .
+                          ,(mapcan #'jira-doc-build-inline-blocks
+                                   (string-split b "\n"))))
+                     b))
+               (jira-doc-build-lists (list quoted-text))))))
 
 (defun jira-doc--build-heading (heading-text)
   "Make an ADF heading node.
@@ -492,6 +812,10 @@ HEADING-TEXT is the heading text."
 (defun jira-doc--build-rule ()
   "Make an ADF rule node (horizontal rule)."
   `(("type" . "rule")))
+
+(defun jira-doc--build-hard-break ()
+  "Make an ADF hardBreak node."
+  `(("type" . "hardBreak")))
 
 (defun jira-doc--build-list-item (&rest children)
   "Make an ADF listItem node.
@@ -558,13 +882,18 @@ ROWS are the table rows."
   "Parse inline block nodes out of TEXT and convert everything to ADF nodes.
 Links and code are actually kinds of marks, but their ADF structure is not
 like other marks, so it's easier to pretend they're blocks."
-  (let ((blocks (jira-doc--split (list text)
+  (let ((blocks (jira-doc--split (list (string-trim text))
                                  jira-regexp-mention
                                  #'jira-doc--build-mention)))
-    (setq blocks (jira-doc-build-task-lists blocks))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-inline-adf
+                                  #'jira-doc--build-inline-adf))
     ;; links and code are actually kinds of marks, but their ADF
     ;; structure is not like other marks, so it's easier to pretend
     ;; they're blocks.
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-date
+                                  #'jira-doc--build-date))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-code
                                   #'jira-doc--build-code))
@@ -701,8 +1030,7 @@ like other marks, so it's easier to pretend they're blocks."
                               #'(lambda (marker text)
                                   (jira-doc--build-task-item (string-match-p (rx "[" (not space) "]")
                                                                              marker)
-                                                             (jira-doc-build-inline-blocks
-                                                              (string-trim text))))))
+                                                             (jira-doc-build-inline-blocks text)))))
       (pcase b
         ((map ("type" "taskItem"))
          (push b cur-list))
@@ -728,13 +1056,15 @@ like other marks, so it's easier to pretend they're blocks."
   (let ((blocks
 	 (thread-first
 	   (list text)
-	   (jira-doc--split jira-regexp-code-block  #'jira-doc--build-code-block)
+	   (jira-doc--split jira-regexp-code-block   #'jira-doc--build-code-block)
+           (jira-doc--split jira-regexp-toplevel-adf #'jira-doc--build-inline-adf)
            jira-doc--split-paragraphs
-	   (jira-doc--split jira-regexp-blockquote  #'jira-doc--build-blockquote)
-	   (jira-doc--split jira-regexp-heading     #'jira-doc--build-heading)
-	   (jira-doc--split jira-regexp-hr          #'jira-doc--build-rule)
+	   (jira-doc--split jira-regexp-blockquote   #'jira-doc--build-blockquote)
+	   (jira-doc--split jira-regexp-heading      #'jira-doc--build-heading)
+	   (jira-doc--split jira-regexp-hr           #'jira-doc--build-rule)
 	   (jira-doc-build-tables)
-	   (jira-doc-build-lists))))
+	   (jira-doc-build-lists)
+           (jira-doc-build-task-lists))))
     (mapcar (lambda (s)
 	      (if (stringp s)
 		  `(("type" . "paragraph")
