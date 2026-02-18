@@ -1,4 +1,12 @@
 # Changelog
+## 2.21.0 (2026-02-18)
+- Add support for editing comments and issue descriptions
+- Convert ADF to markup for editing with proper handling of:
+  - Text marks (bold, italic, code, links, colors, etc.)
+  - Lists, blockquotes, code blocks, task lists
+  - Unsupported ADF nodes embedded as invisible sexps
+- Support for editing with Jira API v2
+
 ## 2.20.0 (2026-02-10)
 - Fix filter endpoint compatibility for older Jira Server installations by auto-detecting the correct endpoint (`filter/my` vs `filter/favourite`)
 
