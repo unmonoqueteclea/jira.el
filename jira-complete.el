@@ -218,23 +218,23 @@ CALLBACK is called with the created issue data.
 
 If project-key or parent-key are provided, they will be used to automatically
 fill the \\='project\\=' and \\='parent\\=' fields."
-  (let* ((fields (alist-get 'fields metadata))
+  (let* ((fields (if (= jira-api-version 3) (alist-get 'fields metadata) (alist-get 'values metadata)))
 	 (required-fields
 	  (seq-filter (lambda (field)
 			(and (eq (alist-get 'required field) t)
 			     (not (eq (alist-get 'hasDefaultValue field) t))))
 		      fields))
 	 (required-fields-keys
-	  (mapcar (lambda (field) (alist-get 'key field)) required-fields))
+          (mapcar (lambda (field) (if (= jira-api-version 3) (alist-get 'key field) (alist-get 'fieldId field))) required-fields))
 	 (field-values
 	  (mapcar
 	   (lambda (field)
 	     (cond
-	      ((and parent-key (string= (alist-get 'key field) "parent"))
+              ((and parent-key (string= (if (= jira-api-version 3) (alist-get 'key field) (alist-get 'fieldId field)) "parent"))
 	       `((key . ,parent-key)))
-	      ((and project-key (string= (alist-get 'key field) "project"))
+	      ((and project-key (string= (if (= jira-api-version 3) (alist-get 'key field) (alist-get 'fieldId field)) "project"))
 	       `((key . ,project-key)))
-	      ((and issue-type (string= (alist-get 'key field) "issuetype"))
+	      ((and issue-type (string= (if (= jira-api-version 3) (alist-get 'key field) (alist-get 'fieldId field)) "issuetype"))
 	       `((id . ,issue-type)))
 	      (t
 	       (jira-complete-ask-field field))))

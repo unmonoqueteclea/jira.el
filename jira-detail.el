@@ -761,7 +761,7 @@ Shows the detail view of the parent issue for the current issue."
  choose one if there are multiple options."
   (let* ((project (jira-detail--project-key))
          (response (jira-api-get-project-issue-types project :sync t))
-         (types (alist-get 'issueTypes response))
+         (types (if (= jira-api-version 3) (alist-get 'issueTypes response) (alist-get 'values response)))
          (subtasks-types
           (cl-remove-if-not (lambda (item) (eq (cdr (assoc 'subtask item)) t))
 			    (append types nil))))
