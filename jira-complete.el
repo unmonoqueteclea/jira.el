@@ -227,16 +227,16 @@ fill the \\='project\\=' and \\='parent\\=' fields."
 			     (not (eq (alist-get 'hasDefaultValue field) t))))
 		      fields))
 	 (required-fields-keys
-          (mapcar (lambda (field) (alist-get 'field-key field)) required-fields))
+          (mapcar (lambda (field) (alist-get field-key field)) required-fields))
 	 (field-values
 	  (mapcar
 	   (lambda (field)
 	     (cond
-              ((and parent-key (string= (alist-get 'field-key field) "parent"))
+              ((and parent-key (string= (alist-get field-key field) "parent"))
 	       `((key . ,parent-key)))
-	      ((and project-key (string= (alist-get 'field-key field) "project"))
+	      ((and project-key (string= (alist-get field-key field) "project"))
 	       `((key . ,project-key)))
-	      ((and issue-type (string= (alist-get 'field-key field) "issuetype"))
+	      ((and issue-type (string= (alist-get field-key field) "issuetype"))
 	       `((id . ,issue-type)))
 	      (t
 	       (jira-complete-ask-field field))))

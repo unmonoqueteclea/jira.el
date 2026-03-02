@@ -762,7 +762,7 @@ Shows the detail view of the parent issue for the current issue."
   (let* ((types-key (if (= jira-api-version 3) 'issueTypes 'values))
          (project (jira-detail--project-key))
          (response (jira-api-get-project-issue-types project :sync t))
-         (types (alist-get 'types-key response))
+         (types (alist-get types-key response))
          (subtasks-types
           (cl-remove-if-not (lambda (item) (eq (cdr (assoc 'subtask item)) t))
 			    (append types nil))))
