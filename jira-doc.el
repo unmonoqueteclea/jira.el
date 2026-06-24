@@ -54,6 +54,10 @@
   '("listItem" "media" "nestedExpand" "tableCell" "tableHeader"
     "tableRow" "extensionFrame" "taskItem"))
 
+;; these blocks do *not* contain content
+(defconst jira-doc--card-blocks
+  '("blockCard" "embedCard"))
+
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
     "text" "mediaInline"))
@@ -136,8 +140,7 @@
         (text (alist-get 'text block)))
     (cond ((string= type "hardBreak") "\n")
           ((string= type "inlineCard")
-           (let* ((url (alist-get 'url (alist-get 'attrs block))))
-             (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
+           (jira-doc--format-card block))
           ((string= type "mediaInline")
            (jira-doc--format-media block))
           ((string= type "mention")
@@ -204,6 +207,15 @@ BLOCK is the media node to format."
        (format "<file:%s%s>"
                (if (string= "" collection) "" (concat collection ":"))
                (if (and alt (not (string= "" alt))) alt id))))))
+
+(defun jira-doc--format-card (block)
+  "Format a blockCard, embedCard or inlineCard node to a string."
+  (let* ((url (alist-get 'url (alist-get 'attrs block)))
+         (text (buttonize url
+                          (lambda (_) (browse-url url)))))
+    (if (member (alist-get 'type block) jira-doc--card-blocks)
+        (jira-doc--format-boxed-text text "🔗")
+      text)))
 
 (defun jira-doc--format-task-list (block)
   "Format a taskList node to a string."
@@ -318,12 +330,14 @@ BLOCK is the media node to format."
          (jira-doc--indent (+ 4 jira-doc--indent)))
     (jira-doc--format-content-block block)))
 
-(defun jira-doc--format-block(block)
+(defun jira-doc--format-block (block)
   "Format BLOCK to a string."
   (let ((type (alist-get 'type block)))
     (cond ((or (string= type "orderedList")
                (string= type "bulletList"))
            (jira-doc--format-list-block block))
+          ((member type jira-doc--card-blocks)
+           (jira-doc--format-card block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--format-content-block block))
