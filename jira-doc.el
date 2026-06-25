@@ -165,17 +165,17 @@
 
 (defun jira-doc--format-boxed-text (text prefix)
   "Format TEXT in an ASCII box with line wrapping.
-PREFIX is used for the box border."
+PREFIX is a single-character string, usually an emoji, used for the box border."
   (let* ((fill-column 80)
          (lines (with-temp-buffer
                   (insert text) (fill-region (point-min) (point-max))
                   (split-string (buffer-string) "\n" t)))
          (width (apply #'max (mapcar #'string-width lines)))
-         (hborder (concat "┌" prefix (make-string width ?-) "┐"))
-         (bborder (concat "└" (make-string (+ width 2) ?-) "┘"))
+         (hborder (concat "┌" prefix (make-string width ?─) "┐"))
+         (bborder (concat "└" (make-string (+ width 2) ?─) "┘"))
          (boxed-lines
           (mapcar (lambda (line)
-                    (concat "| " line (make-string (- width (string-width line)) ? ) " |"))
+                    (concat "│ " line (make-string (- width (string-width line)) ? ) " │"))
                   lines)))
     (concat
      "\n"
