@@ -466,6 +466,8 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
            (jira-doc--markup-date block))
           ((string= type "taskItem")
            (jira-doc--markup-task-item block))
+          ((string= type "inlineCard")
+           (jira-doc--markup-card block))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-doc--markup-with-marks text marks)))
           (t
@@ -542,6 +544,17 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
   (let ((jira-doc--inhibit-escapes t))
     (jira-doc--markup-content-block block)))
 
+(defun jira-doc--markup-card (block)
+  "Format BLOCK, a blockCard/embedCard/inlineCard node, with markup."
+  (let* ((type (pcase (alist-get 'type block)
+                 ("blockCard" "smart-card")
+                 ("embedCard" "smart-embed")
+                 ("inlineCard" "smart-link"))))
+    (if type
+        (let ((url (alist-get 'url (alist-get 'attrs block))))
+          (format "[%s|%s|%s]" url url type))
+      (jira-doc--markup-unsupported block))))
+
 (defun jira-doc--markup-list (block)
   "Format BLOCK, an orderedList or bulletList, with markup."
   (let ((jira-doc--markup-list-prefix
@@ -575,6 +588,8 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
            (jira-doc--markup-list block))
           ((string= type "codeBlock")
            (jira-doc--markup-code-block block))
+          ((member type jira-doc--card-blocks)
+           (jira-doc--markup-card block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--markup-content-block block))
@@ -760,6 +775,16 @@ CONTENTS is the link text and URL."
                               (("href" . ,url)
                                ("title" . ,title))))))))
 
+(defun jira-doc--build-card (contents type)
+  "Make an ADF card node."
+  (pcase-let* ((`(,_title ,url) (split-string contents "|")))
+    `(("type" . ,(pcase type
+                   ("smart-link" "inlineCard")
+                   ("smart-embed" "embedCard")
+                   ("smart-card" "blockCard")))
+      ("attrs" .
+       (("url" . ,url))))))
+
 (defun jira-doc--build-date (date)
   "Make an ADF date node.
 DATE is the timestamp to use."
@@ -911,6 +936,9 @@ like other marks, so it's easier to pretend they're blocks."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-code
                                   #'jira-doc--build-code))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-inline-card
+                                  #'jira-doc--build-card))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-link
                                   #'jira-doc--build-link))
@@ -1073,6 +1101,7 @@ like other marks, so it's easier to pretend they're blocks."
 	   (jira-doc--split jira-regexp-code-block   #'jira-doc--build-code-block)
            (jira-doc--split jira-regexp-toplevel-adf #'jira-doc--build-inline-adf)
            jira-doc--split-paragraphs
+           (jira-doc--split jira-regexp-toplevel-card #'jira-doc--build-card)
 	   (jira-doc--split jira-regexp-blockquote   #'jira-doc--build-blockquote)
 	   (jira-doc--split jira-regexp-heading      #'jira-doc--build-heading)
 	   (jira-doc--split jira-regexp-hr           #'jira-doc--build-rule)
