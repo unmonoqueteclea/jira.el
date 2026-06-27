@@ -54,6 +54,10 @@
   '("listItem" "media" "nestedExpand" "tableCell" "tableHeader"
     "tableRow" "extensionFrame" "taskItem"))
 
+;; these blocks do *not* contain content
+(defconst jira-doc--card-blocks
+  '("blockCard" "embedCard"))
+
 (defconst jira-doc--inline-blocks
   '("date" "emoji" "hardBreak" "inlineCard" "mention" "status"
     "text" "mediaInline"))
@@ -136,8 +140,7 @@
         (text (alist-get 'text block)))
     (cond ((string= type "hardBreak") "\n")
           ((string= type "inlineCard")
-           (let* ((url (alist-get 'url (alist-get 'attrs block))))
-             (buttonize url `(lambda (data) (interactive) (browse-url ,url)))))
+           (jira-doc--format-card block))
           ((string= type "mediaInline")
            (jira-doc--format-media block))
           ((string= type "mention")
@@ -162,17 +165,17 @@
 
 (defun jira-doc--format-boxed-text (text prefix)
   "Format TEXT in an ASCII box with line wrapping.
-PREFIX is used for the box border."
+PREFIX is a single-character string, usually an emoji, used for the box border."
   (let* ((fill-column 80)
          (lines (with-temp-buffer
                   (insert text) (fill-region (point-min) (point-max))
                   (split-string (buffer-string) "\n" t)))
          (width (apply #'max (mapcar #'string-width lines)))
-         (hborder (concat "┌" prefix (make-string width ?-) "┐"))
-         (bborder (concat "└" (make-string (+ width 2) ?-) "┘"))
+         (hborder (concat "┌" prefix (make-string width ?─) "┐"))
+         (bborder (concat "└" (make-string (+ width 2) ?─) "┘"))
          (boxed-lines
           (mapcar (lambda (line)
-                    (concat "| " line (make-string (- width (string-width line)) ? ) " |"))
+                    (concat "│ " line (make-string (- width (string-width line)) ? ) " │"))
                   lines)))
     (concat
      "\n"
@@ -204,6 +207,15 @@ BLOCK is the media node to format."
        (format "<file:%s%s>"
                (if (string= "" collection) "" (concat collection ":"))
                (if (and alt (not (string= "" alt))) alt id))))))
+
+(defun jira-doc--format-card (block)
+  "Format a blockCard, embedCard or inlineCard node to a string."
+  (let* ((url (alist-get 'url (alist-get 'attrs block)))
+         (text (buttonize url
+                          (lambda (_) (browse-url url)))))
+    (if (member (alist-get 'type block) jira-doc--card-blocks)
+        (jira-doc--format-boxed-text text "🔗")
+      text)))
 
 (defun jira-doc--format-task-list (block)
   "Format a taskList node to a string."
@@ -318,12 +330,14 @@ BLOCK is the media node to format."
          (jira-doc--indent (+ 4 jira-doc--indent)))
     (jira-doc--format-content-block block)))
 
-(defun jira-doc--format-block(block)
+(defun jira-doc--format-block (block)
   "Format BLOCK to a string."
   (let ((type (alist-get 'type block)))
     (cond ((or (string= type "orderedList")
                (string= type "bulletList"))
            (jira-doc--format-list-block block))
+          ((member type jira-doc--card-blocks)
+           (jira-doc--format-card block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--format-content-block block))
@@ -452,6 +466,8 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
            (jira-doc--markup-date block))
           ((string= type "taskItem")
            (jira-doc--markup-task-item block))
+          ((string= type "inlineCard")
+           (jira-doc--markup-card block))
           (text (let ((marks (jira-doc--marks block)))
                   (jira-doc--markup-with-marks text marks)))
           (t
@@ -528,6 +544,17 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
   (let ((jira-doc--inhibit-escapes t))
     (jira-doc--markup-content-block block)))
 
+(defun jira-doc--markup-card (block)
+  "Format BLOCK, a blockCard/embedCard/inlineCard node, with markup."
+  (let* ((type (pcase (alist-get 'type block)
+                 ("blockCard" "smart-card")
+                 ("embedCard" "smart-embed")
+                 ("inlineCard" "smart-link"))))
+    (if type
+        (let ((url (alist-get 'url (alist-get 'attrs block))))
+          (format "[%s|%s|%s]" url url type))
+      (jira-doc--markup-unsupported block))))
+
 (defun jira-doc--markup-list (block)
   "Format BLOCK, an orderedList or bulletList, with markup."
   (let ((jira-doc--markup-list-prefix
@@ -561,6 +588,8 @@ If `jira-doc--inhibit-escapes' is non-nil, S is returned unchanged."
            (jira-doc--markup-list block))
           ((string= type "codeBlock")
            (jira-doc--markup-code-block block))
+          ((member type jira-doc--card-blocks)
+           (jira-doc--markup-card block))
           ((or (member type jira-doc--top-level-blocks)
                (member type jira-doc--child-blocks))
            (jira-doc--markup-content-block block))
@@ -746,6 +775,16 @@ CONTENTS is the link text and URL."
                               (("href" . ,url)
                                ("title" . ,title))))))))
 
+(defun jira-doc--build-card (contents type)
+  "Make an ADF card node."
+  (pcase-let* ((`(,_title ,url) (split-string contents "|")))
+    `(("type" . ,(pcase type
+                   ("smart-link" "inlineCard")
+                   ("smart-embed" "embedCard")
+                   ("smart-card" "blockCard")))
+      ("attrs" .
+       (("url" . ,url))))))
+
 (defun jira-doc--build-date (date)
   "Make an ADF date node.
 DATE is the timestamp to use."
@@ -897,6 +936,9 @@ like other marks, so it's easier to pretend they're blocks."
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-code
                                   #'jira-doc--build-code))
+    (setq blocks (jira-doc--split blocks
+                                  jira-regexp-inline-card
+                                  #'jira-doc--build-card))
     (setq blocks (jira-doc--split blocks
                                   jira-regexp-link
                                   #'jira-doc--build-link))
@@ -1059,6 +1101,7 @@ like other marks, so it's easier to pretend they're blocks."
 	   (jira-doc--split jira-regexp-code-block   #'jira-doc--build-code-block)
            (jira-doc--split jira-regexp-toplevel-adf #'jira-doc--build-inline-adf)
            jira-doc--split-paragraphs
+           (jira-doc--split jira-regexp-toplevel-card #'jira-doc--build-card)
 	   (jira-doc--split jira-regexp-blockquote   #'jira-doc--build-blockquote)
 	   (jira-doc--split jira-regexp-heading      #'jira-doc--build-heading)
 	   (jira-doc--split jira-regexp-hr           #'jira-doc--build-rule)

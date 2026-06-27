@@ -113,6 +113,29 @@
        (*? (not "]")))
       "]"))
 
+;; The definitions of `jira-regexp-toplevel-card' and
+;; `jira-regexp-inline-card' are almost identical, but they need to be
+;; separate so that `jira-doc-build' creates each at the appropriate
+;; scope: i.e., inline cards should not introduce paragraph breaks.
+(defconst jira-regexp-toplevel-card
+  (rx "["
+      (submatch (*? (not "]"))
+                "|"
+                (*? (not "]"))
+                "|"
+                (submatch (or "smart-card"
+                              "smart-embed")))
+      "]"))
+
+(defconst jira-regexp-inline-card
+  (rx "["
+      (submatch (*? (not "]"))
+                "|"
+                (*? (not "]"))
+                "|"
+                (submatch "smart-link"))
+      "]"))
+
 (defconst jira-regexp-code
   (rx (or (seq "`" (submatch-n 1 (*? (or "\\`" (not "`")))) "`")
           (seq "{{" (submatch-n 1 (*? (or "\\}" (not "}")))) "}}"))))
@@ -141,6 +164,10 @@
     (,jira-regexp-code 0 'jira-face-code t)
     (,jira-regexp-date 1 'jira-face-date t)
     (,jira-regexp-link 0 'jira-face-link t)
+    (,jira-regexp-toplevel-card (0 'jira-face-link t)
+                                (2 font-lock-builtin-face t))
+    (,jira-regexp-inline-card (0 'jira-face-link t)
+                              (2 font-lock-builtin-face t))
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
     (,jira-regexp-inline-adf
