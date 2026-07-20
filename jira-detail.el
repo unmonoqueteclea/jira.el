@@ -640,6 +640,61 @@ CALLBACK is called with the watchers data."
                        (jira-detail--update-field-action field-id value jira-detail--current-key))
                    (message "Could not find metadata for field %s" field-id))))))))
 
+(defun jira-detail--create-attachment (key)
+  "Upload a file as an attachment to KEY."
+  (let ((file (read-file-name (format "Attach file to %s: " key)
+                              (file-name-as-directory
+                               default-directory)
+                              nil
+                              'confirm-after-completion)))
+    (jira-actions-attach key
+                         (list (expand-file-name file))
+                         (lambda () (jira-detail-show-issue key)))))
+
+(defun jira-attach--name (buffer)
+  (let ((n (buffer-file-name buffer)))
+    (if n
+        (file-name-nondirectory n)
+      (read-string (format "Attachment filename (default %s): "
+                           (buffer-name buffer))
+                   nil
+                   'jira-attach-history
+                   (buffer-name buffer)))))
+
+(defun jira-attach-dwim (issue-key)
+  "Upload the current buffer to ISSUE-KEY as an attachment.
+If the region is active, use that and prompt for a name; otherwise use
+the whole buffer.
+
+In Dired buffers, attach all marked files, or the current file."
+  (interactive
+   (list (jira-complete-ask-issue
+          (format "Attach %s to issue"
+                  (cond ((eq major-mode 'dired-mode)
+                         (let ((files (dired-get-marked-files t)))
+                           (format "%d files (%s)"
+                                   (length files)
+                                   (string-join files ", "))))
+                        ((region-active-p)
+                         (format "selected region of %s"
+                                 (buffer-name)))
+                        (t
+                         (buffer-name)))))))
+  (let* ((files (if (eq major-mode 'dired-mode)
+                    (dired-get-marked-files)
+                  (let ((contents (if (region-active-p)
+                                      (buffer-substring-no-properties
+                                       (region-beginning)
+                                       (region-end))
+                                    (current-buffer)))
+                        (name (jira-attach--name (current-buffer))))
+                    `((,name ,@(if (bufferp contents)
+                                   `(:buffer ,contents)
+                                 `(:data ,contents))))))))
+    (jira-actions-attach issue-key
+                         files
+                         (lambda () (jira-detail-show-issue issue-key)))))
+
 (defun jira-detail-find-issue-by-key ()
   "Find and show a Jira issue by key."
   (let ((key (jira-complete-ask-issue)))
@@ -670,6 +725,9 @@ CALLBACK is called with the watchers data."
    ("e" "Edit comment at point"
     (lambda () (interactive) (jira-detail--edit-comment-at-point)))]
   ["Issue Actions"
+   ("A" "Create issue attachment"
+    (lambda () "Create issue attachment"
+      (interactive) (jira-detail--create-attachment jira-detail--current-key)))
    ("C" "Change issue status"
     (lambda () (interactive) (call-interactively #'jira-actions-change-issue-menu)))
    ("O" "Open issue in browser"
@@ -718,6 +776,9 @@ CALLBACK is called with the watchers data."
     (define-key map (kbd  "-")
 		(lambda () "Remove comment at point"
 		  (interactive) (jira-detail--remove-comment-at-point)))
+    (define-key map (kbd "A")
+                (lambda () "Create issue attachment"
+                  (interactive) (jira-detail--create-attachment jira-detail--current-key)))
     (define-key map (kbd "C")
 		(lambda () "Change issue status"
 		  (interactive) (call-interactively #'jira-actions-change-issue-menu)))

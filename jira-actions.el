@@ -228,6 +228,17 @@ WATCHERS is the list of current watchers and CALLBACK is called after removal."
                       (message "Removed %s as a watcher." name)
                       (funcall callback))))))
 
+(defun jira-actions-attach (issue-key files callback)
+  "Attach FILES to ISSUE-KEY.
+FILES is a list of descriptors in the format expected by (`request' :files ...)."
+  (jira-api-call "POST"
+                 (format "issue/%s/attachments" issue-key)
+                 :files files
+                 :callback
+                 (lambda (_data _response)
+                   (message "Created attachments on %s" issue-key)
+                   (funcall callback))))
+
 (provide 'jira-actions)
 
 ;;; jira-actions.el ends here
