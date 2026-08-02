@@ -78,12 +78,12 @@
 
 (defvar jira-mark-keywords
   `((,(jira-edit--mark-matcher
-       (rx "*" (not (or "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
+       (rx "*" (not (any "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
      0 'bold append)
     ;; unlike other marks, deleted checks for word boundaries to avoid
     ;; false positives on hyphenated words: like-so and then like-this.
     (,(jira-edit--mark-matcher
-       (rx bow "-" (not (or "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
+       (rx bow "-" (not (any "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
      0 'jira-face-deleted append)
     (,(jira-edit--mark-matcher
        (rx "_" (+? (or "\\_" (not (or "\r" "\n")))) "_"))
