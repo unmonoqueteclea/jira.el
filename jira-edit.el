@@ -369,8 +369,6 @@ For example, http://example.com becomes [http://example.com|http://example.com].
 It avoids converting links that are already inside square brackets."
   (with-temp-buffer
     (insert text)
-    (modify-syntax-entry ?\[ "(")
-    (modify-syntax-entry ?\] ")(")
     (let ((url-re "\\(https?://[^][ \t\n<>()]+\\)"))
       (goto-char (point-min))
       (while (re-search-forward url-re nil t)
