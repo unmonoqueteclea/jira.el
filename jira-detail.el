@@ -430,7 +430,8 @@ SECTION-TYPE should be `jira-subtask-section' or `jira-linked-issue-section'."
 
 (defvar-keymap jira-attachment-section-map
   :doc "Keymap for Jira attachment sections."
-  "<RET>" #'jira-detail--get-attachment)
+  "<RET>" #'jira-detail--get-attachment
+  "d" #'jira-detail--delete-attachment)
 
 (defclass jira-attachment-section (magit-section)
   ((keymap :initform 'jira-attachment-section-map)))
@@ -480,6 +481,19 @@ SECTION-TYPE should be `jira-subtask-section' or `jira-linked-issue-section'."
       :callback
       (lambda (data _response)
         (jira-detail--show-attachment name data))))
+    (_ (error "Not a Jira attachment"))))
+
+(defun jira-detail--delete-attachment ()
+  "Delete the selected attachment in the current section."
+  (interactive)
+  (pcase (magit-section-value-if [jira-attachment-section])
+    (`(,name ,id)
+     (when (yes-or-no-p (format "Really delete %s" name))
+       (jira-api-call "DELETE"
+                      (format "attachment/%s" id)
+                      :callback
+                      (lambda (_data _response)
+                        (jira-detail-show-issue jira-detail--current-key)))))
     (_ (error "Not a Jira attachment"))))
 
 (defun jira-detail--show-attachment (name data)
