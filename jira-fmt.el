@@ -31,6 +31,7 @@
 (require 'color)
 (require 'shr)
 (require 'jira-utils)
+(require 'jira-api)
 
 (defcustom jira-use-color-marks
   t
@@ -163,7 +164,7 @@ An alist is a list where each element is a cons cell."
   (list  issue-id
          'face 'jira-face-link
          'help-echo (format "Click to open: %s" issue-id)
-         'href (concat jira-base-url "/browse/" issue-id)
+         'href (concat (jira-api--get-current-url) "/browse/" issue-id)
          'follow-link t
          'action #'jira-fmt--link-action))
 
@@ -173,7 +174,7 @@ An alist is a list where each element is a cons cell."
       (buttonize
        issue-id
        (lambda (_data) (interactive)
-	 (browse-url (concat jira-base-url "/browse/" issue-id))))
+	 (browse-url (concat (jira-api--get-current-url) "/browse/" issue-id))))
     ""))
 
 (defun jira-fmt-date (date &optional color-today)

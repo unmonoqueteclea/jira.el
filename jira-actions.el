@@ -166,7 +166,7 @@
 
 (defun jira-actions-open-issue (issue-key)
   "Open ISSUE-KEY in browser."
-  (browse-url (format "%s/browse/%s" jira-base-url issue-key)))
+  (browse-url (format "%s/browse/%s" (jira-api--get-current-url) issue-key)))
 
 (defun jira-actions-add-comment (issue-key text callback)
   "Create a comment to the issue ISSUE-KEY.
