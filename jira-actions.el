@@ -231,6 +231,13 @@ WATCHERS is the list of current watchers and CALLBACK is called after removal."
 (defun jira-actions-attach (issue-key files callback)
   "Attach FILES to ISSUE-KEY.
 FILES is a list of descriptors in the format expected by (`request' :files ...)."
+  ;; Ensure that only regular files are selected.
+  (dolist (f files)
+    (when (stringp f)
+      (let ((attrs (file-attributes f)))
+        (when (or (not attrs)
+                  (eq (file-attribute-type attrs) t)) ; directory
+          (error "Cannot upload %s" f)))))
   (jira-api-call "POST"
                  (format "issue/%s/attachments" issue-key)
                  :files files
