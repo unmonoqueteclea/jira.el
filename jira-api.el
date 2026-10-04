@@ -107,14 +107,14 @@ Each URL should be a complete Jira URL like: https://acme.atlassian.net"
       (let* ((current-url (jira-api--get-current-url))
              (auth-host (replace-regexp-in-string "https://" "" current-url))
 	     (auth-info (car (auth-source-search :host auth-host :require '(:secret)))))
-	(when auth-info (funcall (plist-get auth-info :secret))))))
+	(when auth-info (auth-info-password auth-info)))))
 
 (defun jira-api--tempo-token ()
   "Retrieve the token for HOST from config or auth-source."
   (if (and jira-tempo-token (not (string= "" jira-tempo-token)))
       jira-tempo-token
       (let* ((auth-info (car (auth-source-search :host "tempo.io" :require '(:secret)))))
-	(when auth-info (funcall (plist-get auth-info :secret))))))
+	(when auth-info (auth-info-password auth-info)))))
 
 (defun jira-api--auth-header (username token)
   "Generate the Authorization header for Jira requests with USERNAME and TOKEN."
