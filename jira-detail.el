@@ -41,6 +41,12 @@
 (require 'jira-complete)
 (require 'jira-edit)
 
+;; jira-issues requires this file, so it can't be required here
+(defvar jira-issues--current-jql)
+(declare-function jira-issues-mode "jira-issues")
+(declare-function jira-issues--reset-pagination "jira-issues")
+(declare-function jira-issues--fetch-and-display "jira-issues")
+
 
 (defvar-local jira-detail--current nil
   "All data from current issue being displayed in the detail view.")
@@ -237,6 +243,7 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
             (insert "\n\n")))))
     (jira-detail--show-attachments key issue)
     (jira-detail--show-subtasks key issue)
+    (jira-detail--show-children-section key)
     (jira-detail--show-linked-issues key issue)
     (jira-detail--show-other key)
     (pop-to-buffer (current-buffer))))
@@ -321,6 +328,59 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
                       (jira-detail--format-issue-entry subtask)))))
               (insert "\n"))))))))
 
+(defvar-keymap jira-child-issue-section-map
+  :doc "Keymap for Jira child issue sections."
+  "<RET>" #'jira-detail--visit-child-issue
+  "o" #'jira-detail--visit-child-issue-other-window)
+
+(defclass jira-child-issue-section (magit-section)
+  ((keymap :initform 'jira-child-issue-section-map)))
+
+(defun jira-detail--visit-child-issue ()
+  "Visit the child issue at point."
+  (interactive)
+  (pcase (magit-section-value-if [jira-child-issue-section])
+    (`(,key . ,_summary)
+     (jira-detail-show-issue key))
+    (_ (message "Not a child issue"))))
+
+(defun jira-detail--visit-child-issue-other-window ()
+  "Visit the child issue at point in another window."
+  (interactive)
+  (pcase (magit-section-value-if [jira-child-issue-section])
+    (`(,key . ,_summary)
+     (let ((jira-detail-reuse-buffer nil))
+       (jira-detail-show-issue key)
+       (display-buffer (jira-detail--get-issue-buffer key)
+                       '(display-buffer-use-some-window))))
+    (_ (message "Not a child issue"))))
+
+(defun jira-detail--show-children-section (key)
+  "Fetch and display children for issue KEY asynchronously.
+Subtasks are skipped, they are already shown in their own section."
+  (jira-detail--get-children
+   key
+   (lambda (children)
+     (setq children
+           (seq-remove (lambda (child)
+                         (eq (alist-get 'subtask
+                                        (alist-get 'issuetype
+                                                   (alist-get 'fields child)))
+                             t))
+                       children))
+     (when (and children (> (length children) 0))
+       (with-current-buffer (jira-detail--get-issue-buffer key)
+         (let ((inhibit-read-only t))
+           (goto-char (point-max))
+           (magit-insert-section (jira-issue-children nil nil)
+             (magit-insert-section (children-list nil nil)
+               (magit-insert-heading
+                 (format "👶 Children (%d)" (length children)))
+               (magit-insert-section-body
+                 (seq-doseq (child children)
+                   (jira-detail--format-child-issue-entry child)))
+               (insert "\n")))))))))
+
 (defun jira-detail--get-issue-buffer (key)
   "Get or create the Jira issue detail buffer for KEY.
 If `jira-detail-reuse-buffer' is enabled, reuse a single buffer for all issues."
@@ -358,6 +418,16 @@ If `jira-detail-reuse-buffer' is enabled, reuse a single buffer for all issues."
                       (jira-detail--format-linked-issue issue link-type direction)))))
               (insert "\n"))))))))
 
+(defun jira-detail--format-entry-content (key summary status &optional link-text type-name)
+  "Format the content of an issue entry line.
+KEY, SUMMARY and STATUS are required. LINK-TEXT and TYPE-NAME are optional."
+  (format " - %s%s %s%s %s\n"
+          (if link-text (concat "[" link-text "] ") "")
+          (jira-fmt-issue-key-not-tabulated key)
+          (if type-name (concat "[" type-name "] ") "")
+          (jira-fmt-issue-status status)
+          summary))
+
 (defun jira-detail--format-issue-entry (issue &optional link-text)
   "Format a single ISSUE entry, optionally with LINK-TEXT for linked issues.
 This is a shared function used by both subtasks and linked issues."
@@ -366,11 +436,22 @@ This is a shared function used by both subtasks and linked issues."
          (issue-summary (alist-get 'summary issue-fields))
          (issue-status (alist-get 'status issue-fields)))
     (if (and (stringp issue-key) (stringp issue-summary))
-        (insert (format " - %s %s %s %s\n"
-                        (if link-text (concat "[" link-text "]") "")
-                        (jira-fmt-issue-key-not-tabulated issue-key)
-                        (jira-fmt-issue-status issue-status)
-                        issue-summary))
+        (insert (jira-detail--format-entry-content
+                 issue-key issue-summary issue-status link-text))
+      (insert (format " - [Invalid issue data: %s]\n" issue-key)))))
+
+(defun jira-detail--format-child-issue-entry (issue)
+  "Format a single child ISSUE entry with interactive navigation support."
+  (let* ((issue-key (alist-get 'key issue))
+         (issue-fields (alist-get 'fields issue))
+         (issue-summary (alist-get 'summary issue-fields))
+         (issue-status (alist-get 'status issue-fields))
+         (issue-type (alist-get 'issuetype issue-fields))
+         (type-name (alist-get 'name issue-type)))
+    (if (and (stringp issue-key) (stringp issue-summary))
+        (magit-insert-section (jira-child-issue-section (cons issue-key issue-summary) nil)
+          (insert (jira-detail--format-entry-content
+                   issue-key issue-summary issue-status nil type-name)))
       (insert (format " - [Invalid issue data: %s]\n" issue-key)))))
 
 (defun jira-detail--format-linked-issue (issue link-type direction)
@@ -738,6 +819,9 @@ In Dired buffers, attach all marked files, or the current file."
     (lambda () (interactive ) (jira-detail--remove-comment-at-point)))
    ("e" "Edit comment at point"
     (lambda () (interactive) (jira-detail--edit-comment-at-point)))]
+  ["Issue Navigation"
+   ("P" "Show parent issue" (lambda () (interactive) (jira-detail--show-parent-issue)))
+   ("K" "Show children (list)" (lambda () (interactive) (jira-detail--show-children)))]
   ["Issue Actions"
    ("A" "Create issue attachment"
     (lambda () "Create issue attachment"
@@ -746,7 +830,7 @@ In Dired buffers, attach all marked files, or the current file."
     (lambda () (interactive) (call-interactively #'jira-actions-change-issue-menu)))
    ("O" "Open issue in browser"
     (lambda () (interactive) (jira-actions-open-issue jira-detail--current-key)))
-   ("P" "Show parent issue" (lambda () (interactive) (jira-detail--show-parent-issue)))
+   ("S" "Add subtask" (lambda () (interactive) (jira-detail--create-subtask)))
    ("U" "Update issue field"
     (lambda () (interactive) (jira-detail--update-field)))
    ("w" "Update watchers" jira-detail--watchers-menu)
@@ -756,9 +840,7 @@ In Dired buffers, attach all marked files, or the current file."
     (lambda () (interactive)
       (jira-actions-copy-issues-id-to-clipboard jira-detail--current-key)))
    ("g" "Refresh issue detail"
-    (lambda () (interactive) (jira-detail-show-issue jira-detail--current-key)))
-   ("S" "Add subtask"
-    (lambda () (interactive) (jira-detail--create-subtask)))]
+    (lambda () (interactive) (jira-detail-show-issue jira-detail--current-key)))]
   [:if jira-detail--subtask-at-point-p
    "Subtask at point"
    ("RET" "Open subtask"
@@ -817,6 +899,9 @@ In Dired buffers, attach all marked files, or the current file."
     (define-key map (kbd "P")
 		(lambda () "Show parent issue"
 		  (interactive) (jira-detail--show-parent-issue)))
+    (define-key map (kbd "K")
+		(lambda () "Show children (list)"
+		  (interactive) (jira-detail--show-children)))
     (define-key map (kbd "S")
 		(lambda () "Add subtask" (interactive) (jira-detail--create-subtask)))
     map)
@@ -830,6 +915,33 @@ Shows the detail view of the parent issue for the current issue."
     (if (and parent-key (not (string= parent-key "")))
         (jira-detail-show-issue parent-key)
       (message "No parent issue for the current issue."))))
+
+(defun jira-detail--get-children (key callback)
+  "Fetch child issues for issue KEY and call CALLBACK with the results.
+CALLBACK receives the list of child issues."
+  (let ((jql (format "parent = %s ORDER BY created ASC" key)))
+    (jira-api-search
+     :params `(("jql" . ,jql)
+               ("maxResults" . 50)
+               ("fields" . "key,summary,status,issuetype"))
+     :callback (lambda (data _response)
+                 (funcall callback (alist-get 'issues data)))
+     :errback (lambda (&rest _) (funcall callback nil)))))
+
+(defun jira-detail--show-children ()
+  "Show child issues of the current issue in a new issues list buffer.
+Opens the issues list filtered to show only children of the current Epic/Story."
+  (interactive)
+  (let ((key jira-detail--current-key))
+    (if key
+        (let ((jql (format "parent = %s ORDER BY created ASC" key))
+              (buffer-name (format "*Jira Children: %s*" key)))
+          (switch-to-buffer (get-buffer-create buffer-name))
+          (jira-issues-mode)
+          (setq jira-issues--current-jql jql)
+          (jira-issues--reset-pagination)
+          (jira-issues--fetch-and-display nil))
+      (message "No current issue."))))
 
 (defun jira-detail--create-subtask-type ()
   "Find subtasks types available for the current project, asking the user to
