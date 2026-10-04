@@ -143,7 +143,7 @@ several issues (`m`, `u`) to change them at once, and sort or filter the table.
 | Key | Action |
 |---|---|
 | `C` | Change status |
-| `U` | Update a field (summary, description, assignee, priority, labels, ...) |
+| `U` | Update a field (summary, description, assignee, priority, labels, ...). Defaults to the field under the cursor |
 | `+` | Add a comment |
 | `e` | Edit the comment at point |
 | `-` | Delete the comment at point |

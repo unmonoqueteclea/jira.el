@@ -711,11 +711,44 @@ CALLBACK is called with the watchers data."
       id)))
 
 
+(defconst jira-detail--field-header-aliases
+  '(("Parent" . "Parent Issue")
+    ("Time" . "Remaining Estimate"))
+  "Detail view headers whose updatable field has a different name.")
+
+(defun jira-detail--field-at-point ()
+  "Return the name of the updatable field at point, or nil."
+  (let ((section (magit-current-section)))
+    (if (and section (eq (oref section type) 'description))
+        "Description"
+      (save-excursion
+        (beginning-of-line)
+        ;; headers, made by `jira-detail--header', are italic text at
+        ;; the start of the line padded with spaces to 16 columns
+        (let* ((end (next-single-property-change (point) 'face nil
+                                                 (line-end-position)))
+               (header (and (eq (get-text-property (point) 'face) 'italic)
+                            (buffer-substring-no-properties (point) end)))
+               (padding (and header
+                             (buffer-substring-no-properties
+                              end (min (line-end-position)
+                                       (+ (point) (max 16 (length header)))))))
+               (name (and header
+                          (string-blank-p padding)
+                          (or (cdr (assoc header jira-detail--field-header-aliases))
+                              header))))
+          (when (assoc name jira-detail--updatable-fields)
+            name))))))
+
 (defun jira-detail--update-field ()
-  "Update a field for the current issue."
+  "Update a field for the current issue.
+If point is on a field, it is offered as the default."
   (let* ((field-alist jira-detail--updatable-fields)
          (field-names (mapcar #'car field-alist))
-         (chosen-field-name (completing-read "Field to update: " field-names nil t)))
+         (field-at-point (jira-detail--field-at-point))
+         (chosen-field-name (completing-read
+                             (format-prompt "Field to update" field-at-point)
+                             field-names nil t nil nil field-at-point)))
     (when chosen-field-name
       (jira-detail--ensure-update-metadata)
       (cond ((string= chosen-field-name "Description")
