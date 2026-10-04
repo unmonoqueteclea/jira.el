@@ -240,6 +240,7 @@ PAGE-TOKEN is optional and used for pagination."
   (jira-issues--reset-pagination)
   (jira-issues--fetch-and-display nil))
 
+
 (defun jira-issues--myself-inapt-p ()
   "Return t if assignee is set."
   (if transient-current-command
@@ -252,9 +253,11 @@ PAGE-TOKEN is optional and used for pagination."
       (let ((args (transient-args transient-current-command)))
 	(transient-arg-value "--myself" args))))
 
+
+
 (defun jira-issues--transient-default-value ()
   "Return default transient value including default issue type if set."
-  (let ((defaults nil))
+  (let ((defaults '("--myself")))
     (when jira-issues-default-type
       (push (concat "--type=" jira-issues-default-type) defaults))
     defaults))
@@ -271,8 +274,7 @@ PAGE-TOKEN is optional and used for pagination."
      (lambda () (when jira-users (cons "[EMPTY]" (hash-table-keys jira-users)))))
     ("m" "Just from myself" "--myself"
      :transient transient--do-call
-     :inapt-if jira-issues--myself-inapt-p
-     :init-value (lambda (obj) (oset obj value "--myself")))
+     :inapt-if jira-issues--myself-inapt-p)
     ("c" "Just from current sprint" "--current-sprint"
      :transient t)
     ("s" "Status" "--status="
@@ -312,8 +314,16 @@ PAGE-TOKEN is optional and used for pagination."
                              " arguments to default ones"))]]
 
   ["Actions"
-   ("l" "List Jira Issues" tablist-revert)
+   ("l" "List Jira Issues" jira-issues--list)
    ("F" "Apply named filter" (lambda (&optional _) (interactive) (jira-issues--apply-filter)))])
+
+(defun jira-issues--list ()
+  "List issues and remember the current arguments for this session.
+Without this, every time the menu is opened the arguments are reset
+to their default values, e.g. `--myself' comes back after removing it."
+  (interactive)
+  (transient-set-value (transient-prefix-object))
+  (tablist-revert))
 
 (defun jira-issues--jump-to-tempo ()
   "Jump to Tempo worklogs, closing current buffer."
