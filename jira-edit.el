@@ -78,12 +78,12 @@
 
 (defvar jira-mark-keywords
   `((,(jira-edit--mark-matcher
-       (rx "*" (not (or "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
+       (rx "*" (not (in "*" space)) (*? (or "\\*" (not (or "\r" "\n")))) "*"))
      0 'bold append)
     ;; unlike other marks, deleted checks for word boundaries to avoid
     ;; false positives on hyphenated words: like-so and then like-this.
     (,(jira-edit--mark-matcher
-       (rx bow "-" (not (or "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
+       (rx bow "-" (not (in "-" space)) (+? (or "\\-" (not (or "\r" "\n")))) "-" eow))
      0 'jira-face-deleted append)
     (,(jira-edit--mark-matcher
        (rx "_" (+? (or "\\_" (not (or "\r" "\n")))) "_"))
@@ -111,6 +111,29 @@
        alpha (*? (or alpha digit "+" "-" "."))
        "://"
        (*? (not "]")))
+      "]"))
+
+;; The definitions of `jira-regexp-toplevel-card' and
+;; `jira-regexp-inline-card' are almost identical, but they need to be
+;; separate so that `jira-doc-build' creates each at the appropriate
+;; scope: i.e., inline cards should not introduce paragraph breaks.
+(defconst jira-regexp-toplevel-card
+  (rx "["
+      (submatch (*? (not "]"))
+                "|"
+                (*? (not "]"))
+                "|"
+                (submatch (or "smart-card"
+                              "smart-embed")))
+      "]"))
+
+(defconst jira-regexp-inline-card
+  (rx "["
+      (submatch (*? (not "]"))
+                "|"
+                (*? (not "]"))
+                "|"
+                (submatch "smart-link"))
       "]"))
 
 (defconst jira-regexp-code
@@ -141,6 +164,10 @@
     (,jira-regexp-code 0 'jira-face-code t)
     (,jira-regexp-date 1 'jira-face-date t)
     (,jira-regexp-link 0 'jira-face-link t)
+    (,jira-regexp-toplevel-card (0 'jira-face-link t)
+                                (2 font-lock-builtin-face t))
+    (,jira-regexp-inline-card (0 'jira-face-link t)
+                              (2 font-lock-builtin-face t))
     (,jira-regexp-task-item 1 font-lock-builtin-face)
     (,jira-regexp-emoji 0 'jira-face-emoji-reference prepend)
     (,jira-regexp-inline-adf
@@ -155,7 +182,7 @@
                    (+ not-newline)))))
 
 (defconst jira-regexp-heading
-  (rx bol "h" (submatch (any "1-6") ". " (*? not-newline)) eol))
+  (rx bol "h" (submatch (in "1-6") ". " (*? not-newline)) eol))
 
 (defconst jira-regexp-table-row
   (rx bol
@@ -369,8 +396,6 @@ For example, http://example.com becomes [http://example.com|http://example.com].
 It avoids converting links that are already inside square brackets."
   (with-temp-buffer
     (insert text)
-    (modify-syntax-entry ?\[ "(")
-    (modify-syntax-entry ?\] ")(")
     (let ((url-re "\\(https?://[^][ \t\n<>()]+\\)"))
       (goto-char (point-min))
       (while (re-search-forward url-re nil t)

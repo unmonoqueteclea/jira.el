@@ -241,7 +241,7 @@ FORMAT-NAME is a string used in the docstring."
       (jira-export-menu)
     (message "Export is only available in jira-issues-mode")))
 
-;;;###autoload
+;;;###autoload (autoload 'jira-export-menu "jira-export" "Show menu for exporting Jira Issues." t)
 (transient-define-prefix jira-export-menu ()
   "Show menu for exporting Jira Issues."
   ["Export Format"
