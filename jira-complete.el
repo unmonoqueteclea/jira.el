@@ -61,10 +61,12 @@
          (key-at-point (jira-complete--find-key-at-point)))
     (cond (key-from-url key-from-url) (key-at-point key-at-point) (t ""))))
 
-(defun jira-complete-ask-issue ()
+(defun jira-complete-ask-issue (&optional prompt)
   "Read an issue key or URL from the user and return its key."
   (let* ((default-input (jira-complete--get-default-issue-key-input))
-         (input (read-string (format "Find issue by key or URL%s: "
+         (input (read-string (format "%s%s: "
+                                     (or prompt
+                                         "Find issue by key or URL")
                                      (if (string= default-input "")
                                          ""
                                        (concat " (default " default-input ")")))

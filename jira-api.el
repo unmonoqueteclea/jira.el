@@ -190,12 +190,19 @@ Ensure secondary URLs list exists for completion."
     (message "[Jira API Response Headers]: %s" (or response-headers "No headers"))
     (message "[Jira API Response Body]: %s" (or response-data "No response body"))))
 
-(cl-defun jira-api-call (verb endpoint &key params data callback parser sync error complete)
+(cl-defun jira-api-call (verb endpoint &key headers params data files callback parser sync error complete)
   "Perform a VERB request to the Jira API ENDPOINT.
 
 PARAMS is a list of cons cells, DATA is the request body, and CALLBACK
 is the function to call if successful. PARSER is a function to call
 in a buffer with the result data, defaulting to `json-read'.
+
+FILES is a alist of names and bodies, to be attached as
+multipart/form-data.
+
+HEADERS is an alist of HTTP headers. The \"Authorization\" header is
+provided automatically. If HEADERS does not include \"Content-Type\", it
+defaults to \"application/json\".
 
 Sync is a boolean indicating whether the request should be
 synchronous or not. If SYNC is non-nil, the request will block
@@ -223,10 +230,23 @@ COMPLETE is a function to call when the request completes (regardless of success
       (request
 	(jira-api--url current-url endpoint)
 	:type verb
-	:headers `(("Authorization" . ,auth) ("Content-Type" . "application/json"))
+	:headers `(("Authorization" . ,auth)
+                   ,@headers
+                   ,@(if files
+                         '(("X-Atlassian-Token" . "nocheck"))
+                       nil)
+                   ;; If :files is present, request will generate
+                   ;; Content-Type for us.
+                   ,@(if (or files
+                             (assoc "Content-Type" headers))
+                         nil
+                       `(("Content-Type" . "application/json"))))
 	:sync sync
 	:params (or params '())
 	:data (if data (json-encode data) nil)
+        :files (mapcar #'(lambda (x)
+                           `("file" ,@x))
+                       files)
 	:parser (or parser 'json-read)
 	:success callback
 	:error (or error
