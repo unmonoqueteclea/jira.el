@@ -357,12 +357,17 @@ If the region is active, the tags are inserted around it"
    (let ((d (org-read-date nil t)))
      (insert (format-time-string "{{%F}}" d)))))
 
+(defun jira-edit-cancel ()
+  "Discard the current editor buffer without sending it to Jira."
+  (interactive)
+  (quit-window t))
+
 (defvar-keymap jira-edit-mode-map
   "C-c C-c" (lambda ()
                 "Send the buffer contents to Jira."
                 (interactive)
                 (funcall jira-edit--callback))
-  "C-c C-k" 'kill-buffer
+  "C-c C-k" 'jira-edit-cancel
   "C-c c"   'jira-edit-insert-color
   "C-c d"   'jira-edit-insert-date
   "C-c m"   'jira-edit-insert-mention)
