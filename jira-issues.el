@@ -314,8 +314,16 @@ PAGE-TOKEN is optional and used for pagination."
                              " arguments to default ones"))]]
 
   ["Actions"
-   ("l" "List Jira Issues" tablist-revert)
+   ("l" "List Jira Issues" jira-issues--list)
    ("F" "Apply named filter" (lambda (&optional _) (interactive) (jira-issues--apply-filter)))])
+
+(defun jira-issues--list ()
+  "List issues and remember the current arguments for this session.
+Without this, every time the menu is opened the arguments are reset
+to their default values, e.g. `--myself' comes back after removing it."
+  (interactive)
+  (transient-set-value (transient-prefix-object))
+  (tablist-revert))
 
 (defun jira-issues--jump-to-tempo ()
   "Jump to Tempo worklogs, closing current buffer."
