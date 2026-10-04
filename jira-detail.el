@@ -112,6 +112,15 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
   "Check if the current issue is a subtask."
   (eq (jira-table-extract-field jira-issues-fields :issue-type-subtask jira-detail--current) t))
 
+(defmacro jira-detail--insert-in-root (&rest body)
+  "Insert the sections created by BODY as children of the root section.
+Sections added after the detail buffer is built (often asynchronously)
+must be attached to its root section, otherwise each one replaces it
+and the sections before it can't be found at point."
+  (declare (indent 0))
+  `(let ((magit-insert-section--parent magit-root-section))
+     ,@body))
+
 (defun jira-detail--header (header)
   "Format HEADER to be used as a header in the detail view."
   (concat
@@ -209,38 +218,43 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
     (visual-line-mode 1)
     (let ((inhibit-read-only t))
       (erase-buffer)
-      ;; section: Jira Issue Summary
-      (magit-insert-section (jira-issue-summary nil nil)
-        (magit-insert-heading "📝 Jira Issue Summary")
-        (magit-insert-section-body (jira-detail--issue-summary issue)))
-      (insert "\n")
-      ;; section: Information
-      (magit-insert-section (jira-issue-information nil nil)
-        ;; section: Team Data
-        (magit-insert-section (team-data nil nil)
-          (magit-insert-heading "👥 Team Data")
-          (magit-insert-section-body (jira-detail--issue-team issue))
-          (insert "\n"))
-        ;; section: Manager Data
-        (magit-insert-section (manager-data nil nil)
-          (magit-insert-heading "📊 Manager Data")
-          (magit-insert-section-body
-            (jira-detail--issue-manager-data issue)
-            (insert "\n")
-            (when jira-detail-show-announcements
-              (insert "----------------------------------------------------------------\n")
-              (insert (jira-fmt-set-face "jira.el v2.0" 'jira-face-h1) " allows you to ")
-              (insert "update fields with smart suggestions!\n")
-              (insert "Press " (jira-fmt-set-face "?"  'jira-face-date)
-		      " to open transient menu, ")
-              (insert "and " (jira-fmt-set-face "U" 'jira-face-date)
-		      " to update a field.")
-              (insert "\n----------------------------------------------------------------\n\n"))))
-        (magit-insert-section (description nil nil)
-          (magit-insert-heading "📄 Description")
-          (magit-insert-section-body
-            (jira-detail--description issue)
-            (insert "\n\n")))))
+      ;; root section holding every section of the issue
+      (magit-insert-section (jira-issue-detail nil nil)
+        ;; section: Jira Issue Summary
+        (magit-insert-section (jira-issue-summary nil nil)
+          (magit-insert-heading "📝 Jira Issue Summary")
+          (magit-insert-section-body (jira-detail--issue-summary issue)))
+        (insert "\n")
+        ;; section: Information
+        (magit-insert-section (jira-issue-information nil nil)
+          ;; section: Team Data
+          (magit-insert-section (team-data nil nil)
+            (magit-insert-heading "👥 Team Data")
+            (magit-insert-section-body (jira-detail--issue-team issue))
+            (insert "\n"))
+          ;; section: Manager Data
+          (magit-insert-section (manager-data nil nil)
+            (magit-insert-heading "📊 Manager Data")
+            (magit-insert-section-body
+              (jira-detail--issue-manager-data issue)
+              (insert "\n")
+              (when jira-detail-show-announcements
+                (insert "----------------------------------------------------------------\n")
+                (insert (jira-fmt-set-face "jira.el v2.0" 'jira-face-h1) " allows you to ")
+                (insert "update fields with smart suggestions!\n")
+                (insert "Press " (jira-fmt-set-face "?"  'jira-face-date)
+                        " to open transient menu, ")
+                (insert "and " (jira-fmt-set-face "U" 'jira-face-date)
+                        " to update a field.")
+                (insert "\n----------------------------------------------------------------\n\n"))))
+          (magit-insert-section (description nil nil)
+            (magit-insert-heading "📄 Description")
+            (magit-insert-section-body
+              (jira-detail--description issue)
+              (insert "\n\n")))))
+      ;; sections added later are appended to the root, so its end
+      ;; must move with them
+      (set-marker-insertion-type (oref magit-root-section end) t))
     (jira-detail--show-attachments key issue)
     (jira-detail--show-subtasks key issue)
     (jira-detail--show-children-section key)
@@ -286,17 +300,18 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
   (with-current-buffer (jira-detail--get-issue-buffer key)
     (let ((inhibit-read-only t))
       (goto-char (point-max))
-      (magit-insert-section (jira-issue-comments nil nil)
-	(magit-insert-section (comments-list nil nil)
-          (magit-insert-heading "💬 Comments (press + to add new)")
-          (magit-insert-section-body
-	    (mapcar (lambda (comment)
-		      (magit-insert-section (comment (alist-get 'id comment) nil)
-			(magit-insert-heading (jira-detail--comment-author comment))
-			(magit-insert-section-body
-			  (insert (jira-doc-format (alist-get 'body comment)))
-			  (insert "\n\n"))))
-		    comments)))))))
+      (jira-detail--insert-in-root
+        (magit-insert-section (jira-issue-comments nil nil)
+	  (magit-insert-section (comments-list nil nil)
+            (magit-insert-heading "💬 Comments (press + to add new)")
+            (magit-insert-section-body
+	      (mapcar (lambda (comment)
+		        (magit-insert-section (comment (alist-get 'id comment) nil)
+			  (magit-insert-heading (jira-detail--comment-author comment))
+			  (magit-insert-section-body
+			    (insert (jira-doc-format (alist-get 'body comment)))
+			    (insert "\n\n"))))
+		      comments))))))))
 
 (defun jira-detail--show-comments (key)
   "Retrieve and display comments for issue KEY."
@@ -318,15 +333,16 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
       (with-current-buffer (jira-detail--get-issue-buffer key)
         (let ((inhibit-read-only t))
           (goto-char (point-max))
-          (magit-insert-section (jira-issue-subtasks nil nil)
-	    (magit-insert-section (subtasks-list nil nil)
-              (magit-insert-heading "🔗 Subtasks")
-              (magit-insert-section-body
-		(seq-doseq (subtask subtasks)
-                  (let ((subtask-key (alist-get 'key subtask)))
-                    (magit-insert-section (jira-subtask-section subtask-key nil)
-                      (jira-detail--format-issue-entry subtask)))))
-              (insert "\n"))))))))
+          (jira-detail--insert-in-root
+            (magit-insert-section (jira-issue-subtasks nil nil)
+	      (magit-insert-section (subtasks-list nil nil)
+                (magit-insert-heading "🔗 Subtasks")
+                (magit-insert-section-body
+		  (seq-doseq (subtask subtasks)
+                    (let ((subtask-key (alist-get 'key subtask)))
+                      (magit-insert-section (jira-subtask-section subtask-key nil)
+                        (jira-detail--format-issue-entry subtask)))))
+                (insert "\n")))))))))
 
 (defvar-keymap jira-child-issue-section-map
   :doc "Keymap for Jira child issue sections."
@@ -372,14 +388,15 @@ Subtasks are skipped, they are already shown in their own section."
        (with-current-buffer (jira-detail--get-issue-buffer key)
          (let ((inhibit-read-only t))
            (goto-char (point-max))
-           (magit-insert-section (jira-issue-children nil nil)
-             (magit-insert-section (children-list nil nil)
-               (magit-insert-heading
-                 (format "👶 Children (%d)" (length children)))
-               (magit-insert-section-body
-                 (seq-doseq (child children)
-                   (jira-detail--format-child-issue-entry child)))
-               (insert "\n")))))))))
+           (jira-detail--insert-in-root
+             (magit-insert-section (jira-issue-children nil nil)
+               (magit-insert-section (children-list nil nil)
+                 (magit-insert-heading
+                   (format "👶 Children (%d)" (length children)))
+                 (magit-insert-section-body
+                   (seq-doseq (child children)
+                     (jira-detail--format-child-issue-entry child)))
+                 (insert "\n"))))))))))
 
 (defun jira-detail--get-issue-buffer (key)
   "Get or create the Jira issue detail buffer for KEY.
@@ -405,18 +422,19 @@ If `jira-detail-reuse-buffer' is enabled, reuse a single buffer for all issues."
       (with-current-buffer (jira-detail--get-issue-buffer key)
         (let ((inhibit-read-only t))
           (goto-char (point-max))
-          (magit-insert-section (jira-issue-linked-issues nil nil)
-            (magit-insert-section (linked-issues-list nil nil)
-              (magit-insert-heading "🔗 Linked Issues")
-              (magit-insert-section-body
-                (seq-doseq (link issuelinks)
-                  (let* ((processed (jira-detail--process-link link))
-                         (issue (car processed))
-                         (direction (cadr processed))
-                         (link-type (caddr processed)))
-                    (when issue
-                      (jira-detail--format-linked-issue issue link-type direction)))))
-              (insert "\n"))))))))
+          (jira-detail--insert-in-root
+            (magit-insert-section (jira-issue-linked-issues nil nil)
+              (magit-insert-section (linked-issues-list nil nil)
+                (magit-insert-heading "🔗 Linked Issues")
+                (magit-insert-section-body
+                  (seq-doseq (link issuelinks)
+                    (let* ((processed (jira-detail--process-link link))
+                           (issue (car processed))
+                           (direction (cadr processed))
+                           (link-type (caddr processed)))
+                      (when issue
+                        (jira-detail--format-linked-issue issue link-type direction)))))
+                (insert "\n")))))))))
 
 (defun jira-detail--format-entry-content (key summary status &optional link-text type-name)
   "Format the content of an issue entry line.
@@ -525,28 +543,29 @@ SECTION-TYPE should be `jira-subtask-section' or `jira-linked-issue-section'."
       (with-current-buffer (jira-detail--get-issue-buffer key)
 	(let ((inhibit-read-only t))
           (goto-char (point-max))
-          (magit-insert-section (jira-issue-attachments nil nil)
-	    (magit-insert-section (attachements-list nil nil)
-              (magit-insert-heading "📎 Attachments (press RET to visualize)")
-              (magit-insert-section-body
-		(mapc
-		 (lambda (attachment)
-		   (let* ((url (url-generic-parse-url (alist-get 'content attachment)))
-                          ;; FIXME: verify that filename matches
-                          ;; "attachment/content/[0-9]+"
-                          (id (file-name-nondirectory (url-filename url)))
-                          (val (list (alist-get 'filename attachment) id)))
-                     (magit-insert-section (jira-attachment-section val nil)
-                       (magit-insert-section-body
-			 (insert (format " - %-30s %10s %5sB %s\n"
-					 (alist-get 'filename attachment)
-					 (alist-get 'mimeType attachment)
-					 (file-size-human-readable
-                                          (alist-get 'size attachment))
-					 (jira-fmt-datetime
-                                          (alist-get 'created attachment))))))))
-		 attachments)
-		(insert "\n")))))))))
+          (jira-detail--insert-in-root
+            (magit-insert-section (jira-issue-attachments nil nil)
+	      (magit-insert-section (attachements-list nil nil)
+                (magit-insert-heading "📎 Attachments (press RET to visualize)")
+                (magit-insert-section-body
+		  (mapc
+		   (lambda (attachment)
+		     (let* ((url (url-generic-parse-url (alist-get 'content attachment)))
+                            ;; FIXME: verify that filename matches
+                            ;; "attachment/content/[0-9]+"
+                            (id (file-name-nondirectory (url-filename url)))
+                            (val (list (alist-get 'filename attachment) id)))
+                       (magit-insert-section (jira-attachment-section val nil)
+                         (magit-insert-section-body
+			   (insert (format " - %-30s %10s %5sB %s\n"
+					   (alist-get 'filename attachment)
+					   (alist-get 'mimeType attachment)
+					   (file-size-human-readable
+                                            (alist-get 'size attachment))
+					   (jira-fmt-datetime
+                                            (alist-get 'created attachment))))))))
+		   attachments)
+		  (insert "\n"))))))))))
 
 (defun jira-detail--get-attachment ()
   "Get the attachment in the current section and visit it in a new buffer."
@@ -605,13 +624,14 @@ SECTION-TYPE should be `jira-subtask-section' or `jira-linked-issue-section'."
          (setq jira-detail--current-watchers names)
          (goto-char (point-max))
 	 ;; section: Other
-	 (magit-insert-section (jira-issue-other nil nil)
-           (magit-insert-section (other nil nil)
-             (magit-insert-heading "➕ Other")
-             (magit-insert-section-body
-               (insert (jira-detail--header "Watchers")
-                       (string-join names ", ")
-                       "\n\n")))))))))
+	 (jira-detail--insert-in-root
+           (magit-insert-section (jira-issue-other nil nil)
+             (magit-insert-section (other nil nil)
+               (magit-insert-heading "➕ Other")
+               (magit-insert-section-body
+                 (insert (jira-detail--header "Watchers")
+                         (string-join names ", ")
+                         "\n\n"))))))))))
 
 (defun jira-detail--watchers (key callback)
   "Show the watchers list of issue with KEY.
