@@ -51,9 +51,10 @@
          (date (transient-arg-value "--date=" args))
          (time (transient-arg-value "--time=" args))
          (adjust-estimate
-          (if (and estimate (not (string-empty-p estimate))) "new" "auto")))
+          (if (and estimate (not (string-empty-p estimate))) "new" "auto"))
+         (issue-key (jira-utils-marked-item)))
     (jira-api-call
-     "POST" (concat "issue/"(jira-utils-marked-item) "/worklog")
+     "POST" (concat "issue/" issue-key "/worklog")
      :params `(("notifyUsers" . ,(if notify "true" "false"))
                ("adjustEstimate" . ,adjust-estimate)
                ,@(when (string= adjust-estimate "new")
@@ -66,8 +67,14 @@
                                                          ("text" . ,comment)))))))))
              ("timeSpent" . ,time))
      :callback (lambda (_data _response)
-                  (kill-buffer "*Jira Issues*")
-                  (jira-tempo)))))
+                 (message "Added %s worklog to %s" time issue-key)
+                 ;; Tempo worklogs can only be listed with a Tempo token
+                 (if (jira-api--tempo-token)
+                     (progn (kill-buffer "*Jira Issues*")
+                            (jira-tempo))
+                   (when (get-buffer "*Jira Issues*")
+                     (with-current-buffer "*Jira Issues*"
+                       (run-hooks 'jira-issues-changed-hook))))))))
 
 (transient-define-prefix jira-actions-add-worklog-menu ()
   "Show menu for adding a Worklog to a Jira Issue."
