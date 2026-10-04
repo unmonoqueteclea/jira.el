@@ -783,7 +783,10 @@ CONTENTS is the link text and URL."
                    ("smart-embed" "embedCard")
                    ("smart-card" "blockCard")))
       ("attrs" .
-       (("url" . ,url))))))
+       (("url" . ,url)
+        ;; embedCard requires a layout, the API rejects it otherwise
+        ,@(when (string= type "smart-embed")
+            '(("layout" . "center"))))))))
 
 (defun jira-doc--build-date (date)
   "Make an ADF date node.
