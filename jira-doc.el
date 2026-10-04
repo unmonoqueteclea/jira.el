@@ -698,12 +698,21 @@ which do not match are returned as-is."
   "Split TEXT into a list of ADF text nodes with marks."
   (let* ((mark-regexp (concat "\\("
                               (string-join (mapcar (lambda (d)
-                                                       (let ((delim (regexp-quote (car d))))
-                                                         (concat delim
-                                                                 "\\(?:"
-                                                                 "\\\\" delim "\\|[^" delim "]"
-                                                                 "\\)+?"
-                                                                 delim)))
+                                                       (let* ((delim (regexp-quote (car d)))
+                                                              (mark (concat delim
+                                                                            "\\(?:"
+                                                                            "\\\\" delim "\\|[^" delim "]"
+                                                                            "\\)+?"
+                                                                            delim)))
+                                                         (if (string= (car d) "-")
+                                                             ;; like `jira-mark-keywords', deleted text
+                                                             ;; can't touch words, to avoid matching
+                                                             ;; hyphenated words: like-so and like-this.
+                                                             (concat "\\(?:^\\|\\B\\)"
+                                                                     "-[^-[:space:]]"
+                                                                     "\\(?:\\\\-\\|[^-\n]\\)*?"
+                                                                     "-\\(?:\\B\\|$\\)")
+                                                           mark)))
                                                    jira-doc--marks-delimiters)
                                            "\\|")
                               ;; don't use `jira-regexp-color' here
