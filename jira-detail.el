@@ -41,6 +41,12 @@
 (require 'jira-complete)
 (require 'jira-edit)
 
+;; jira-issues requires this file, so it can't be required here
+(defvar jira-issues--current-jql)
+(declare-function jira-issues-mode "jira-issues")
+(declare-function jira-issues--reset-pagination "jira-issues")
+(declare-function jira-issues--fetch-and-display "jira-issues")
+
 
 (defvar-local jira-detail--current nil
   "All data from current issue being displayed in the detail view.")
@@ -350,10 +356,18 @@ like \"*Jira Issue Detail: [PROJ-123]*\"."
     (_ (message "Not a child issue"))))
 
 (defun jira-detail--show-children-section (key)
-  "Fetch and display children for issue KEY asynchronously."
+  "Fetch and display children for issue KEY asynchronously.
+Subtasks are skipped, they are already shown in their own section."
   (jira-detail--get-children
    key
    (lambda (children)
+     (setq children
+           (seq-remove (lambda (child)
+                         (eq (alist-get 'subtask
+                                        (alist-get 'issuetype
+                                                   (alist-get 'fields child)))
+                             t))
+                       children))
      (when (and children (> (length children) 0))
        (with-current-buffer (jira-detail--get-issue-buffer key)
          (let ((inhibit-read-only t))
