@@ -156,8 +156,10 @@
                    (:formatter . jira-fmt-issuelinks)))))
 
 (defun jira-utils-marked-items ()
-  "Return the marked items in the current tablist."
-  (mapcar (lambda (i) (car i)) (tablist-get-marked-items)))
+  "Return the marked items in the current tablist.
+Outside a tablist, `tablist-get-marked-items' returns the entry at point,
+which has no id; drop it so callers fall back to the current issue."
+  (delq nil (mapcar #'car (tablist-get-marked-items))))
 
 (defun jira-utils-marked-item ()
   "Return the first marked item in the current tablist or the current issue key.
